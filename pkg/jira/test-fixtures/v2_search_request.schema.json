@@ -1,0 +1,26 @@
+{
+  "id": "https://docs.atlassian.com/jira/REST/schema/search-request#",
+  "title": "Search Request",
+  "type": "object",
+  "properties": {
+    "jql": {
+      "type": "string"
+    },
+    "startAt": {
+      "type": "integer"
+    },
+    "maxResults": {
+      "type": "integer"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "validateQuery": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

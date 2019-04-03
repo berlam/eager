@@ -17,36 +17,31 @@ import (
 )
 
 const (
-	currentUser        = "currentUser()"
-	jqlWorklogDate     = "worklogDate >= '%s' AND worklogDate < '%s'"
-	jqlWorklogProject  = "project in ('%s')"
-	jqlWorklogAuthor   = "worklogAuthor in (%s)"
-	jiraSearchIssueUrl = "/rest/api/3/search"
-	jiraWorklogUrl     = "/rest/api/3/issue/%s/worklog?startAt=%s"
+	headerAccountId      = "X-AACCOUNTID"
+	jiraSearchProjectUrl = "/rest/api/3/project/search?startAt=%s"
+	jiraSearchUserUrl    = "/rest/api/3/user/assignable/multiProjectSearch?projectKeys=%s&query=%s&maxResults=2"
+	jiraSearchIssueUrl   = "/rest/api/3/search"
+	jiraWorklogUrl       = "/rest/api/3/issue/%s/worklog?startAt=%s"
 )
 
 func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, projects []string) pkg.Timesheet {
 	fromDate, toDate := pkg.GetTimeRange(year, month)
 
-	accountId, result, err := getJiraIssues(client, server, userinfo, fromDate, toDate, projects, nil)
+	jql := new(jql).between(fromDate, toDate).me().projects(projects...)
+	accountId, issues, err := getIssues(client, server, userinfo, jql, 0)
 
 	if err != nil {
 		log.Println("Could not get Jira issues.", err)
 		return pkg.Timesheet{}
 	}
 
-	c := make(chan pkg.Effort)
+	c := make(chan pkg.Timesheet)
 	var wg sync.WaitGroup
-	wg.Add(len(result.Issues))
-	for _, item := range result.Issues {
+	wg.Add(len(issues))
+	for _, item := range issues {
 		go func(wg *sync.WaitGroup, item issue) {
 			defer wg.Done()
-			worklogItems, err := getWorklogItems(client, server, userinfo, item.Key)
-			if err != nil {
-				log.Println("Could not get effort for "+item.Key, err)
-			} else {
-				getTimesheet(c, worklogItems, accountId, item.Fields.Project.Key, item.Key, fromDate, toDate)
-			}
+			c <- item.getWorklog(client, server, userinfo, fromDate, toDate)[accountId]
 		}(&wg, item)
 	}
 	go func(wg *sync.WaitGroup) {
@@ -55,41 +50,54 @@ func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, 
 	}(&wg)
 	var timesheet pkg.Timesheet
 	for effort := range c {
-		timesheet = append(timesheet, effort)
+		timesheet = append(timesheet, effort...)
 	}
 
 	return timesheet
 }
 
 func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, projects, users []string) pkg.Timesheet {
+	var err error
 	fromDate, toDate := pkg.GetTimeRange(year, month)
 
-	_, result, err := getJiraIssues(client, server, userinfo, fromDate, toDate, projects, users)
+	if projects == nil {
+		projects, err = getProjects(client, server, userinfo, 0)
+		if err != nil {
+			log.Println("Could not get projects.", err)
+			return pkg.Timesheet{}
+		}
+	}
+
+	if users != nil {
+		accounts, err := getAccounts(client, server, userinfo, projects, users)
+		if err != nil {
+			log.Println("Could not get user.", err)
+			return pkg.Timesheet{}
+		}
+		i := 0
+		for _, account := range accounts {
+			users[i] = string(account)
+			i++
+		}
+	}
+
+	jql := new(jql).between(fromDate, toDate).users(users...).projects(projects...)
+	_, issues, err := getIssues(client, server, userinfo, jql, 0)
 
 	if err != nil {
-		log.Println("Could not get Jira issues.", err)
+		log.Println("Could not get issues.", err)
 		return pkg.Timesheet{}
 	}
 
-	c := make(chan pkg.Effort)
+	c := make(chan pkg.Timesheet)
 	var wg sync.WaitGroup
-	wg.Add(len(result.Issues))
-	for _, item := range result.Issues {
+	wg.Add(len(issues))
+	for _, item := range issues {
 		go func(wg *sync.WaitGroup, item issue) {
 			defer wg.Done()
-			worklogItems, err := getWorklogItems(client, server, userinfo, item.Key)
-			if err != nil {
-				log.Println("Could not get effort for "+item.Key, err)
-			} else {
-				items := worklogItems.getWorklogByEmailAddressAndDate(item.Fields.Project.Key, item.Key, fromDate, toDate)
-				for _, user := range users {
-					itemsOfUser := items[user]
-					if itemsOfUser != nil {
-						for _, itemOfUser := range itemsOfUser {
-							c <- itemOfUser
-						}
-					}
-				}
+			items := item.getWorklog(client, server, userinfo, fromDate, toDate)
+			for _, user := range users {
+				c <- items[accountId(user)]
 			}
 		}(&wg, item)
 	}
@@ -99,45 +107,16 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	}(&wg)
 	var timesheet pkg.Timesheet
 	for effort := range c {
-		timesheet = append(timesheet, effort)
+		timesheet = append(timesheet, effort...)
 	}
 
 	return timesheet
 }
 
-func (items worklogItems) getWorklogByEmailAddressAndDate(pKey projectKey, iKey issueKey, fromDate, toDate time.Time) map[string]pkg.Timesheet {
-	result := make(map[string]pkg.Timesheet)
-	total := len(items)
-	for _, effort := range items {
-		date, _ := time.Parse(pkg.IsoDateTime, effort.Started)
-		date = date.UTC()
-		if !date.Before(fromDate) && date.Before(toDate) {
-			current := result[effort.Author.EmailAddress]
-			if current == nil {
-				current = make(pkg.Timesheet, 0, total)
-			}
-			description := ""
-			if len(effort.Comment.Content) > 0 && len(effort.Comment.Content[0].Content) > 0 {
-				description = effort.Comment.Content[0].Content[0].Text
-			}
-			duration, _ := time.ParseDuration(strconv.Itoa(effort.TimeSpentSeconds) + "s")
-			result[effort.Author.EmailAddress] = append(current, pkg.Effort{
-				Employee:    pkg.Employee(effort.Author.DisplayName),
-				Description: pkg.Description(description),
-				Project:     pkg.Project(pKey),
-				Task:        pkg.Task(iKey),
-				Date:        time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
-				Duration:    duration,
-			})
-		}
-	}
-	return result
-}
-
 func createRequest(client *http.Client, httpMethod string, server *url.URL, userinfo *url.Userinfo, payload io.Reader) (*http.Response, error) {
 	request, err := http.NewRequest(httpMethod, server.String(), payload)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	password, _ := userinfo.Password()
 	request.SetBasicAuth(userinfo.Username(), password)
@@ -150,21 +129,102 @@ func createRequest(client *http.Client, httpMethod string, server *url.URL, user
 	return response, err
 }
 
-func getJiraIssues(client *http.Client, server *url.URL, userinfo *url.Userinfo, fromDate, toDate time.Time, projects, users []string) (accountId, *issueQueryResult, error) {
-	jql := make([]string, 0, 3)
-	jql = append(jql, fmt.Sprintf(jqlWorklogDate, fromDate.Format(pkg.IsoYearMonthDaySlash), toDate.Format(pkg.IsoYearMonthDaySlash)))
-	if users != nil {
-		jql = append(jql, fmt.Sprintf(jqlWorklogAuthor, "'"+strings.Join(users, "','")+"'"))
-	} else {
-		jql = append(jql, fmt.Sprintf(jqlWorklogAuthor, currentUser))
+func getProjects(client *http.Client, server *url.URL, userinfo *url.Userinfo, startAt int) ([]string, error) {
+	projectUrl, err := server.Parse(fmt.Sprintf(jiraSearchProjectUrl, strconv.Itoa(startAt)))
+	response, err := createRequest(client, http.MethodGet, projectUrl, userinfo, nil)
+	if err != nil {
+		return nil, err
 	}
-	if projects != nil {
-		jql = append(jql, fmt.Sprintf(jqlWorklogProject, strings.Join(projects, "','")))
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return nil, err
 	}
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf(response.Status)
+	}
+
+	var result = projectQueryResult{}
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, err
+	}
+	projectKeys := make([]string, 0, result.Total)
+	for _, project := range result.Values {
+		projectKeys = append(projectKeys, string(project.ProjectKey))
+	}
+	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		nextProjectKeys, err := getProjects(client, server, userinfo, result.Total)
+		if err != nil {
+			return nil, err
+		}
+		projectKeys = append(projectKeys, nextProjectKeys...)
+	}
+	return projectKeys, nil
+}
+
+func getAccounts(client *http.Client, server *url.URL, userinfo *url.Userinfo, projects, users []string) (map[string]accountId, error) {
+	result := make(map[string]accountId, len(users))
+	c := make(chan error)
+	var wg sync.WaitGroup
+	wg.Add(len(users))
+	for _, user := range users {
+		go func(wg *sync.WaitGroup, user string) {
+			defer wg.Done()
+			account, err := getUsersByProjects(client, server, userinfo, user, projects)
+			if err != nil {
+				c <- err
+				return
+			}
+			result[user] = account
+		}(&wg, user)
+	}
+	go func(wg *sync.WaitGroup) {
+		defer close(c)
+		wg.Wait()
+	}(&wg)
+	for err := range c {
+		return nil, err
+	}
+	return result, nil
+}
+
+func getUsersByProjects(client *http.Client, server *url.URL, userinfo *url.Userinfo, user string, projects []string) (accountId, error) {
+	userUrl, err := server.Parse(fmt.Sprintf(jiraSearchUserUrl, strings.Join(projects, ","), user))
+	response, err := createRequest(client, http.MethodGet, userUrl, userinfo, nil)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+
+	data, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		return "", err
+	}
+	if response.StatusCode != 200 {
+		return "", fmt.Errorf(response.Status)
+	}
+
+	var result = make([]userQueryResult, 0, 2)
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return "", err
+	}
+	if len(result) == 0 {
+		return "", fmt.Errorf("found no user for %s", user)
+	}
+	if len(result) > 1 {
+		return "", fmt.Errorf("found more than one user for %s", user)
+	}
+	return result[0].AccountId, nil
+}
+
+func getIssues(client *http.Client, server *url.URL, userinfo *url.Userinfo, jql jql, startAt int) (accountId, []issue, error) {
 	body, _ := json.Marshal(issueQuery{
 		Fields:         []string{"project"},
-		Jql:            strings.Join(jql, " AND "),
-		PaginatedQuery: &PaginatedQuery{StartAt: 0},
+		Jql:            jql.build(),
+		PaginatedQuery: &PaginatedQuery{StartAt: startAt},
 	})
 	searchUrl, _ := server.Parse(jiraSearchIssueUrl)
 	response, err := createRequest(client, http.MethodPost, searchUrl, userinfo, bytes.NewBuffer(body))
@@ -173,7 +233,7 @@ func getJiraIssues(client *http.Client, server *url.URL, userinfo *url.Userinfo,
 	}
 	defer response.Body.Close()
 
-	account, _ := url.PathUnescape(response.Header.Get("X-AACCOUNTID"))
+	account, _ := url.PathUnescape(response.Header.Get(headerAccountId))
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return "", nil, err
@@ -184,11 +244,22 @@ func getJiraIssues(client *http.Client, server *url.URL, userinfo *url.Userinfo,
 
 	var result = issueQueryResult{}
 	err = json.Unmarshal(data, &result)
-	return accountId(account), &result, err
+	if err != nil {
+		return "", nil, err
+	}
+	issues := result.Issues
+	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		_, nextIssues, err := getIssues(client, server, userinfo, jql, result.Total)
+		if err != nil {
+			return "", nil, err
+		}
+		issues = append(issues, nextIssues...)
+	}
+	return accountId(account), issues, err
 }
 
-func getWorklogItems(client *http.Client, server *url.URL, userinfo *url.Userinfo, key issueKey) (worklogItems, error) {
-	worklogUrl, err := server.Parse(fmt.Sprintf(jiraWorklogUrl, string(key), strconv.Itoa(0)))
+func getWorklogItems(client *http.Client, server *url.URL, userinfo *url.Userinfo, key issueKey, startAt int) (worklogItems, error) {
+	worklogUrl, err := server.Parse(fmt.Sprintf(jiraWorklogUrl, string(key), strconv.Itoa(startAt)))
 	response, err := createRequest(client, http.MethodGet, worklogUrl, userinfo, nil)
 	if err != nil {
 		return nil, err
@@ -205,34 +276,69 @@ func getWorklogItems(client *http.Client, server *url.URL, userinfo *url.Userinf
 
 	var result = worklogQueryResult{}
 	err = json.Unmarshal(data, &result)
-	return result.Worklogs, nil
+	items := result.Worklogs
+	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		nextItems, err := getWorklogItems(client, server, userinfo, key, result.Total)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, nextItems...)
+	}
+	return items, nil
 }
 
-func getTimesheet(c chan pkg.Effort, worklogItems []*worklogItem, accountId accountId, pKey projectKey, iKey issueKey, fromDate, toDate time.Time) {
-	var wg sync.WaitGroup
-	wg.Add(len(worklogItems))
-	for _, effort := range worklogItems {
-		go func(wg *sync.WaitGroup, effort *worklogItem) {
-			defer wg.Done()
-			date, _ := time.Parse(pkg.IsoDateTime, effort.Started)
-			date = date.UTC()
-			if effort.Author.AccountId == accountId && !date.Before(fromDate) && date.Before(toDate) {
-				description := ""
-				if len(effort.Comment.Content) > 0 && len(effort.Comment.Content[0].Content) > 0 {
-					description = effort.Comment.Content[0].Content[0].Text
-				}
-				duration, _ := time.ParseDuration(strconv.Itoa(effort.TimeSpentSeconds) + "s")
-				c <- pkg.Effort{
-					Description: pkg.Description(description),
-					Project:     pkg.Project(pKey),
-					Task:        pkg.Task(iKey),
-					Date:        time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC),
-					Duration:    duration,
-				}
+func (items worklogItems) getWorklogByAccountIdAndDate(pKey projectKey, iKey issueKey, fromDate, toDate time.Time) map[accountId]pkg.Timesheet {
+	result := make(map[accountId]pkg.Timesheet)
+	total := len(items)
+	for _, effort := range items {
+		if effort.isBetween(fromDate, toDate) {
+			current := result[effort.Author.AccountId]
+			if current == nil {
+				current = make(pkg.Timesheet, 0, total)
 			}
-		}(&wg, effort)
+			result[effort.Author.AccountId] = append(current, pkg.Effort{
+				Employee:    pkg.Employee(effort.Author.DisplayName),
+				Description: effort.getComment(),
+				Project:     pkg.Project(pKey),
+				Task:        pkg.Task(iKey),
+				Date:        effort.getDate(),
+				Duration:    effort.getDuration(),
+			})
+		}
 	}
-	wg.Wait()
+	return result
+}
+
+func (issue issue) getWorklog(client *http.Client, server *url.URL, userinfo *url.Userinfo, fromDate, toDate time.Time) map[accountId]pkg.Timesheet {
+	worklogItems, err := getWorklogItems(client, server, userinfo, issue.Key, 0)
+	if err != nil {
+		log.Println("Could not get effort for "+issue.Key, err)
+		return map[accountId]pkg.Timesheet{}
+	}
+	return worklogItems.getWorklogByAccountIdAndDate(issue.Fields.Project.Key, issue.Key, fromDate, toDate)
+}
+
+func (effort worklogItem) getDate() time.Time {
+	date, _ := time.Parse(pkg.IsoDateTime, effort.Started)
+	return date.UTC().Truncate(time.Hour * 24)
+}
+
+func (effort worklogItem) isBetween(fromDate, toDate time.Time) bool {
+	date := effort.getDate()
+	return !date.Before(fromDate) && date.Before(toDate)
+}
+
+func (effort worklogItem) getComment() pkg.Description {
+	description := ""
+	if len(effort.Comment.Content) > 0 && len(effort.Comment.Content[0].Content) > 0 {
+		description = effort.Comment.Content[0].Content[0].Text
+	}
+	return pkg.Description(description)
+}
+
+func (effort worklogItem) getDuration() time.Duration {
+	duration, _ := time.ParseDuration(strconv.Itoa(effort.TimeSpentSeconds) + "s")
+	return duration
 }
 
 type accountId string
@@ -250,10 +356,21 @@ type PaginatedQuery struct {
 }
 
 type PaginatedResult struct {
-	MaxResults int  `json:"maxResults"`
-	StartAt    int  `json:"startAt"`
-	Total      int  `json:"total"`
-	IsLast     bool `json:"isLast"`
+	MaxResults int   `json:"maxResults"`
+	StartAt    int   `json:"startAt"`
+	Total      int   `json:"total"`
+	IsLast     *bool `json:"isLast,omitempty"`
+}
+
+type projectQueryResult struct {
+	*PaginatedResult
+	Values []struct {
+		ProjectKey projectKey `json:"key"`
+	} `json:"values"`
+}
+
+type userQueryResult struct {
+	AccountId accountId `json:"accountId"`
 }
 
 type issueQuery struct {

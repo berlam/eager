@@ -45,9 +45,6 @@ var showCmd = &cobra.Command{
 		if internal.Config.Projects != nil && internal.Config.PrintEmptyLine {
 			return fmt.Errorf("empty lines (--%s) are not available for projects (--%s)", internal.FlagPrintEmptyLine, internal.FlagProjects)
 		}
-		if internal.Config.Projects != nil && len(internal.Config.Projects) > 1 {
-			return fmt.Errorf("only one project allowed")
-		}
 		return nil
 	},
 }
@@ -57,6 +54,16 @@ var showBcsCmd = &cobra.Command{
 	Short: "Show worklog from BCS",
 	Long:  "Show your worklog data from Projektron BCS.",
 	Args:  cobra.NoArgs,
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		err := cmd.Parent().PersistentPreRunE(cmd, args)
+		if err != nil {
+			return err
+		}
+		if internal.Config.Projects != nil && len(internal.Config.Projects) > 1 {
+			return fmt.Errorf("only one project allowed")
+		}
+		return nil
+	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if internal.Config.Projects == nil {
 			bcs.GetTimesheet(

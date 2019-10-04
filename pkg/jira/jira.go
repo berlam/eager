@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -38,13 +39,13 @@ func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo)
 		return nil, fmt.Errorf(response.Status)
 	}
 
-	var result= serverInfo{}
+	var result = serverInfo{}
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return nil, err
 	}
 	// There are "Cloud" and "Server" deployment types.
-	if result.DeploymentType == "Cloud" {
+	if strings.ToLower(result.DeploymentType) == "cloud" {
 		return &v3{
 			client:   client,
 			server:   server,

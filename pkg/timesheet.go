@@ -55,7 +55,7 @@ func (user User) Normalize() string {
 
 func (ts Timesheet) sortByUserAndDateAndProjectAndTask() Timesheet {
 	sort.Slice(ts, func(i, j int) bool {
-		if ts[i].User.DisplayName != ts[j].User.DisplayName {
+		if ts[i].User != nil && ts[j].User != nil && ts[i].User.DisplayName != ts[j].User.DisplayName {
 			return ts[i].User.DisplayName < ts[j].User.DisplayName
 		}
 		if ts[i].Date != ts[j].Date {
@@ -79,7 +79,11 @@ func (ts Timesheet) summarize() Timesheet {
 	}
 	sum := map[Key]*Effort{}
 	for _, effort := range ts {
-		key := Key{effort.User.DisplayName, effort.Date}
+		name := ""
+		if effort.User != nil {
+			name = effort.User.DisplayName
+		}
+		key := Key{name, effort.Date}
 		tmp := sum[key]
 		if tmp == nil {
 			sum[key] = &Effort{
@@ -100,12 +104,12 @@ func (ts Timesheet) summarize() Timesheet {
 	return timesheet
 }
 
-func (ts Timesheet) Print(writer io.Writer, user, summarize, printEmptyLine bool) {
+func (ts Timesheet) Print(writer io.Writer, user, summarize, printEmptyLine, seconds bool) {
 	spec := NewCsvSpecification().User(user).Date(true).Project(!summarize).Task(!summarize).Duration(true).Description(!summarize)
 
 	timesheet := ts
 	if summarize {
 		timesheet = timesheet.summarize()
 	}
-	timesheet.sortByUserAndDateAndProjectAndTask().WriteCsv(writer, &spec, printEmptyLine)
+	timesheet.sortByUserAndDateAndProjectAndTask().WriteCsv(writer, &spec, printEmptyLine, seconds)
 }

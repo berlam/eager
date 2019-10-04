@@ -156,7 +156,7 @@ func (ts Timesheet) ReadCsv(data []byte, spec *CsvSpecification) (Timesheet, err
 	}
 }
 
-func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmptyLine bool) {
+func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmptyLine, seconds bool) {
 	if len(ts) == 0 {
 		return
 	}
@@ -193,7 +193,7 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 	currentUser := ts[0].User
 	currentDate := time.Date(ts[0].Date.Year(), time.Month(ts[0].Date.Month()), 1, 0, 0, 0, 0, time.UTC)
 	for _, effort := range ts {
-		if currentUser.DisplayName != effort.User.DisplayName {
+		if currentUser != nil && currentUser.DisplayName != effort.User.DisplayName {
 			if currentDate.Day() > 1 {
 				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser)
 			}
@@ -221,7 +221,13 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 			result[spec.date.index] = effort.Date.Format(IsoYearMonthDay)
 		}
 		if spec.duration.enabled {
-			result[spec.duration.index] = effort.Duration.String()
+			var duration string
+			if seconds {
+				duration = fmt.Sprintf("%.0f", effort.Duration.Seconds())
+			} else {
+				duration = effort.Duration.String()
+			}
+			result[spec.duration.index] = duration
 		}
 
 		err := csvw.Write(result)

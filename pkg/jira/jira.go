@@ -107,14 +107,6 @@ func do(api model.Api, year int, month time.Month, projects []pkg.Project, accou
 	// The jql query uses afaik the time zone of the requesting user.
 	fromDate, toDate := pkg.GetTimeRange(year, month)
 
-	if projects == nil || len(projects) == 0 {
-		projects, err = api.Projects(0)
-		if err != nil {
-			log.Println("Could not get projects.", err)
-			return pkg.Timesheet{}
-		}
-	}
-
 	i := 0
 	accountIds := make([]model.Account, len(accounts))
 	for account := range accounts {

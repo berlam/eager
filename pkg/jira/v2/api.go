@@ -17,59 +17,18 @@ import (
 )
 
 const (
-	BasePath         = "/rest/api/2/"
-	myselfUrl        = "myself"
-	searchProjectUrl = "project/search?startAt=%s"
-	searchUserUrl    = "user/assignable/multiProjectSearch?projectKeys=%s&query=%s&maxResults=2"
-	searchIssueUrl   = "search"
-	worklogUrl       = "issue/%s/worklog?startAt=%s"
+	BasePath             = "/rest/api/2/"
+	myselfUrl            = "myself"
+	searchUserUrl        = "user/search?query=%s&maxResults=2"
+	searchProjectUserUrl = "user/assignable/multiProjectSearch?projectKeys=%s&query=%s&maxResults=2"
+	searchIssueUrl       = "search"
+	worklogUrl           = "issue/%s/worklog?startAt=%s"
 )
 
 type Api struct {
 	Client   *http.Client
 	Server   *url.URL
 	Userinfo *url.Userinfo
-}
-
-func (api Api) Projects(startAt int) ([]pkg.Project, error) {
-	projectUrl, err := api.Server.Parse(fmt.Sprintf(searchProjectUrl, strconv.Itoa(startAt)))
-	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, projectUrl, api.Userinfo, nil)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		err := response.Body.Close()
-		if err != nil {
-			log.Println("Response could not be closed.", err)
-		}
-	}()
-
-	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
-	data, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode != 200 {
-		return nil, fmt.Errorf(response.Status)
-	}
-
-	var result = projectQueryResult{}
-	err = json.Unmarshal(data, &result)
-	if err != nil {
-		return nil, err
-	}
-	projectKeys := make([]pkg.Project, 0, result.Total)
-	for _, project := range result.Values {
-		projectKeys = append(projectKeys, pkg.Project(project.ProjectKey))
-	}
-	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
-		nextProjectKeys, err := api.Projects(startAt + result.MaxResults)
-		if err != nil {
-			return nil, err
-		}
-		projectKeys = append(projectKeys, nextProjectKeys...)
-	}
-	return projectKeys, nil
 }
 
 func (api Api) Me() (model.Account, *time.Location, error) {
@@ -103,11 +62,14 @@ func (api Api) Me() (model.Account, *time.Location, error) {
 }
 
 func (api Api) User(user *pkg.User, projects []pkg.Project) (model.Account, *time.Location, error) {
-	projectQueryPart := make([]string, len(projects))
-	for i, project := range projects {
-		projectQueryPart[i] = string(project)
+	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUserUrl, url.QueryEscape(user.DisplayName)))
+	if len(projects) > 0 {
+		projectQueryPart := make([]string, len(projects))
+		for i, project := range projects {
+			projectQueryPart[i] = string(project)
+		}
+		userUrl, err = api.Server.Parse(fmt.Sprintf(searchProjectUserUrl, strings.Join(projectQueryPart, ","), url.QueryEscape(user.DisplayName)))
 	}
-	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUserUrl, strings.Join(projectQueryPart, ","), url.QueryEscape(user.DisplayName)))
 	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, userUrl, api.Userinfo, nil)
 	if err != nil {
 		return "", nil, err

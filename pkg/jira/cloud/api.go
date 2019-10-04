@@ -10,8 +10,7 @@ import (
 )
 
 const (
-	BasePath         = "/rest/api/3/"
-	searchProjectUrl = "project/search"
+	BasePath = "/rest/api/3/"
 )
 
 type Api struct {
@@ -30,10 +29,6 @@ func (api Api) previousVersion() *v2.Api {
 		}
 	}
 	return api.v2
-}
-
-func (api Api) Projects(startAt int) ([]pkg.Project, error) {
-	return api.previousVersion().Projects(startAt)
 }
 
 func (api Api) Me() (model.Account, *time.Location, error) {

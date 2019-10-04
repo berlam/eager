@@ -18,13 +18,6 @@ type PaginatedResult struct {
 	IsLast     *bool `json:"isLast,omitempty"`
 }
 
-type projectQueryResult struct {
-	*PaginatedResult
-	Values []struct {
-		ProjectKey projectKey `json:"key"`
-	} `json:"values"`
-}
-
 type userQueryResult struct {
 	AccountId   model.Account `json:"accountId"`
 	DisplayName string        `json:"displayName"`

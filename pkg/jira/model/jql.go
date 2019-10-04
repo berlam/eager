@@ -16,7 +16,7 @@ const (
 type Jql []string
 
 func (query Jql) Projects(projects ...pkg.Project) Jql {
-	if projects == nil || len(projects) == 0 {
+	if len(projects) == 0 {
 		return query
 	}
 	result := make([]string, len(projects))
@@ -27,7 +27,7 @@ func (query Jql) Projects(projects ...pkg.Project) Jql {
 }
 
 func (query Jql) Users(users ...Account) Jql {
-	if users == nil || len(users) == 0 {
+	if len(users) == 0 {
 		return query
 	}
 	result := make([]string, len(users))

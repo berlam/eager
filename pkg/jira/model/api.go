@@ -10,14 +10,9 @@ type Account string
 type IssueKey string
 
 type Api interface {
-	ProjectAccessor
 	UserAccessor
 	IssueAccessor
 	WorklogAccessor
-}
-
-type ProjectAccessor interface {
-	Projects(startAt int) ([]pkg.Project, error)
 }
 
 type UserAccessor interface {

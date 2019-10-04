@@ -27,7 +27,7 @@ func init() {
 	showBcsCmd.MarkFlagRequired(internal.FlagReport)
 
 	showJiraCmd.Flags().StringArrayVar(&conf.Projects, internal.FlagProjects, nil, "specify the project key")
-	showJiraCmd.Flags().StringArrayVar(&conf.Users, internal.FlagUsers, nil, "show results for user")
+	showJiraCmd.Flags().StringArrayVar(&conf.Users, internal.FlagUsers, nil, "show results for user (or user=id, where id is the account id)")
 }
 
 var showCmd = &cobra.Command{

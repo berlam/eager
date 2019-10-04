@@ -25,25 +25,38 @@ type User struct {
 }
 
 func Projects(projects []string) []Project {
-	result := make([]Project, len(projects))
-	for i, project := range projects {
-		result[i] = Project(project)
+	mapping := make(map[string]Project)
+	for _, project := range projects {
+		mapping[project] = Project(project)
+	}
+	i := 0
+	result := make([]Project, len(mapping))
+	for _, project := range mapping {
+		result[i] = project
+		i++
 	}
 	return result
 }
 
 func Users(users []string) []*User {
-	result := make([]*User, len(users))
-	for i, user := range users {
+	mapping := make(map[string]*User)
+	for _, user := range users {
 		parts := strings.SplitN(user, "=", 2)
+		name := parts[0]
 		id := ""
 		if len(parts) == 2 {
 			id = parts[1]
 		}
-		result[i] = &User{
-			DisplayName: parts[0],
+		mapping[name] = &User{
+			DisplayName: name,
 			Id:          id,
 		}
+	}
+	i := 0
+	result := make([]*User, len(mapping))
+	for _, v := range mapping {
+		result[i] = v
+		i++
 	}
 	return result
 }

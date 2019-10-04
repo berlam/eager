@@ -42,9 +42,6 @@ var showCmd = &cobra.Command{
 		if !internal.Config.Summarize && internal.Config.PrintEmptyLine {
 			return fmt.Errorf("empty lines (--%s) are only available for summaries (--%s)", internal.FlagPrintEmptyLine, internal.FlagSummarize)
 		}
-		if internal.Config.Projects != nil && internal.Config.PrintEmptyLine {
-			return fmt.Errorf("empty lines (--%s) are not available for projects (--%s)", internal.FlagPrintEmptyLine, internal.FlagProjects)
-		}
 		return nil
 	},
 }

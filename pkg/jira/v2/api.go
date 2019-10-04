@@ -61,8 +61,8 @@ func (api Api) Projects(startAt int) ([]pkg.Project, error) {
 	for _, project := range result.Values {
 		projectKeys = append(projectKeys, pkg.Project(project.ProjectKey))
 	}
-	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
-		nextProjectKeys, err := api.Projects(result.Total)
+	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		nextProjectKeys, err := api.Projects(startAt + result.MaxResults)
 		if err != nil {
 			return nil, err
 		}
@@ -102,10 +102,10 @@ func (api Api) User(user pkg.User, projects []pkg.Project) (model.Account, error
 	if err != nil {
 		return "", err
 	}
-	if len(result) == 0 {
+	if len(result) == 0 || !user.Matches(pkg.User(result[0].DisplayName)) {
 		return "", fmt.Errorf("found no user for %s", user)
 	}
-	if len(result) > 1 {
+	if len(result) > 1 && user.Matches(pkg.User(result[1].DisplayName)) {
 		return "", fmt.Errorf("found more than one user for %s", user)
 	}
 	return result[0].AccountId, nil
@@ -145,8 +145,8 @@ func (api Api) Issues(jql model.Jql, startAt int) (model.Account, []model.Issue,
 		return "", nil, err
 	}
 	issues := result.issues()
-	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
-		_, nextIssues, err := api.Issues(jql, result.Total)
+	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		_, nextIssues, err := api.Issues(jql, startAt+result.MaxResults)
 		if err != nil {
 			return "", nil, err
 		}
@@ -180,8 +180,8 @@ func (api Api) Worklog(key model.IssueKey, startAt int) ([]model.Worklog, error)
 	var result = worklogQueryResult{}
 	err = json.Unmarshal(data, &result)
 	items := result.worklogs()
-	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
-		nextItems, err := api.Worklog(key, result.Total)
+	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		nextItems, err := api.Worklog(key, startAt+result.MaxResults)
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +210,7 @@ func (issue issue) Key() model.IssueKey {
 	return issue.ApiKey
 }
 
-func (issue issue) Worklog(worklog []model.Worklog, fromDate, toDate time.Time) map[model.Account]pkg.Timesheet {
+func (issue issue) Worklog(accounts map[model.Account]pkg.User, worklog []model.Worklog, fromDate, toDate time.Time) map[model.Account]pkg.Timesheet {
 	pKey := issue.Fields.Project.Key
 	iKey := issue.ApiKey
 	result := make(map[model.Account]pkg.Timesheet)
@@ -222,7 +222,7 @@ func (issue issue) Worklog(worklog []model.Worklog, fromDate, toDate time.Time) 
 				current = make(pkg.Timesheet, 0, total)
 			}
 			result[effort.Author().Id()] = append(current, pkg.Effort{
-				User:        pkg.User(effort.Author().Name()),
+				User:        accounts[effort.Author().Id()],
 				Description: effort.Comment(),
 				Project:     pkg.Project(pKey),
 				Task:        pkg.Task(iKey),
@@ -236,10 +236,6 @@ func (issue issue) Worklog(worklog []model.Worklog, fromDate, toDate time.Time) 
 
 func (author author) Id() model.Account {
 	return author.AccountId
-}
-
-func (author author) Name() string {
-	return author.DisplayName
 }
 
 func (effort worklogItem) Author() model.Author {

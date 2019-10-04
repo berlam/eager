@@ -38,7 +38,7 @@ type WorklogAccessor interface {
 
 type Issue interface {
 	Key() IssueKey
-	Worklog(worklog []Worklog, fromDate, toDate time.Time) map[Account]pkg.Timesheet
+	Worklog(accounts map[Account]pkg.User, worklog []Worklog, fromDate, toDate time.Time) map[Account]pkg.Timesheet
 }
 
 type Worklog interface {
@@ -51,5 +51,4 @@ type Worklog interface {
 
 type Author interface {
 	Id() Account
-	Name() string
 }

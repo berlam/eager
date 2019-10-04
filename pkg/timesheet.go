@@ -3,7 +3,9 @@ package pkg
 import (
 	"io"
 	"sort"
+	"strings"
 	"time"
+	"unicode"
 )
 
 type Effort struct {
@@ -24,6 +26,26 @@ type Task string
 type Description string
 
 type Timesheet []Effort
+
+func (user User) Matches(other User) bool {
+	otherNormalized := other.Normalize()
+	fields := strings.Fields(user.Normalize())
+	for _, field := range fields {
+		if !strings.Contains(otherNormalized, field) {
+			return false
+		}
+	}
+	return true
+}
+
+func (user User) Normalize() string {
+	return strings.Map(func(r rune) rune {
+		if !unicode.IsLetter(r) && !unicode.IsSpace(r) {
+			return -1
+		}
+		return r
+	}, string(user))
+}
 
 func (ts Timesheet) sortByUserAndDateAndProjectAndTask() Timesheet {
 	sort.Slice(ts, func(i, j int) bool {

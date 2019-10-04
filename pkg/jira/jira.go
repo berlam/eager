@@ -90,7 +90,7 @@ func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, 
 				log.Println("Could not get effort for "+item.Key(), err)
 				return
 			}
-			c <- item.Worklog(items, fromDate, toDate)[accountId]
+			c <- item.Worklog(map[model.Account]pkg.User{}, items, fromDate, toDate)[accountId]
 		}(item)
 	}
 	go func() {
@@ -122,17 +122,15 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 		}
 	}
 
-	if users != nil && len(users) > 0 {
-		accounts, err := accounts(api, projects, users)
-		if err != nil {
-			log.Println("Could not get user.", err)
-			return pkg.Timesheet{}
-		}
-		i := 0
-		for _, account := range accounts {
-			users[i] = pkg.User(account)
-			i++
-		}
+	accounts, err := accounts(api, projects, users)
+	if err != nil {
+		log.Println("Could not get user.", err)
+		return pkg.Timesheet{}
+	}
+	i := 0
+	for account := range accounts {
+		users[i] = pkg.User(account)
+		i++
 	}
 
 	jql := new(model.Jql).Between(fromDate, toDate).Users(users...).Projects(projects...)
@@ -154,7 +152,7 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 				log.Println("Could not get effort for "+item.Key(), err)
 				return
 			}
-			worklog := item.Worklog(items, fromDate, toDate)
+			worklog := item.Worklog(accounts, items, fromDate, toDate)
 			for _, user := range users {
 				c <- worklog[model.Account(user)]
 			}
@@ -172,8 +170,8 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	return timesheet
 }
 
-func accounts(api model.Api, projects []pkg.Project, users []pkg.User) (map[pkg.User]model.Account, error) {
-	result := make(map[pkg.User]model.Account, len(users))
+func accounts(api model.Api, projects []pkg.Project, users []pkg.User) (map[model.Account]pkg.User, error) {
+	result := make(map[model.Account]pkg.User, len(users))
 	c := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(len(users))
@@ -185,7 +183,7 @@ func accounts(api model.Api, projects []pkg.Project, users []pkg.User) (map[pkg.
 				c <- err
 				return
 			}
-			result[user] = account
+			result[account] = user
 		}(user)
 	}
 	go func() {

@@ -23,7 +23,8 @@ type projectQueryResult struct {
 }
 
 type userQueryResult struct {
-	AccountId model.Account `json:"accountId"`
+	AccountId   model.Account `json:"accountId"`
+	DisplayName string        `json:"displayName"`
 }
 
 type author struct {

@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"os"
+	"path/filepath"
 )
 
 var conf internal.Configuration
@@ -18,6 +19,28 @@ func init() {
 		if conf != "" {
 			// Use Configuration file from the flag.
 			viper.SetConfigFile(conf)
+			return
+		}
+
+		// Lookup Configuration by going up the current directory
+		wd, err := os.Getwd()
+		if err != nil {
+			return
+		}
+		for true {
+			file := filepath.Clean(wd + string(filepath.Separator) + "eager.yaml")
+			_, err := os.Stat(file)
+			if os.IsNotExist(err) {
+				nd, err := filepath.Abs(wd + string(filepath.Separator) + "..")
+				if err != nil || nd == wd {
+					break
+				}
+				wd = nd
+				continue
+			}
+			// Found Configuration file
+			viper.SetConfigFile(file)
+			break
 		}
 	})
 

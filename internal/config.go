@@ -18,6 +18,7 @@ const (
 	FlagReport         = "report"
 	FlagSummarize      = "summarize"
 	FlagPrintEmptyLine = "printemptyline"
+	FlagSeconds        = "seconds"
 	FlagAll            = "all"
 	FlagForce          = "force"
 )
@@ -52,6 +53,7 @@ type Configuration struct {
 	Report         string   `mapstructure:"report"`
 	Summarize      bool     `mapstructure:"summarize"`
 	PrintEmptyLine bool     `mapstructure:"printemptyline"`
+	Seconds        bool     `mapstructure:"seconds"`
 }
 
 var Config Configuration

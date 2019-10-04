@@ -19,6 +19,7 @@ func init() {
 	showCmd.PersistentFlags().IntVar(&internal.Config.Month, internal.FlagMonth, int(time.Now().Month()), "specify the month to query effort for")
 	showCmd.PersistentFlags().BoolVarP(&internal.Config.Summarize, internal.FlagSummarize, "s", false, "summarize effort per day")
 	showCmd.PersistentFlags().BoolVar(&internal.Config.PrintEmptyLine, internal.FlagPrintEmptyLine, false, "print empty line for missing day during summary")
+	showCmd.PersistentFlags().BoolVar(&internal.Config.Seconds, internal.FlagSeconds, false, "display duration in seconds")
 
 	showBcsCmd.Flags().StringVar(&internal.Config.Report, internal.FlagReport, "", "specify the name of the report")
 	showBcsCmd.Flags().StringArrayVar(&internal.Config.Projects, internal.FlagProjects, nil, "specify the oid of the project")
@@ -70,7 +71,7 @@ var showBcsCmd = &cobra.Command{
 				internal.Config.Year,
 				time.Month(internal.Config.Month),
 				internal.Config.Report,
-			).Print(os.Stdout, false, internal.Config.Summarize, internal.Config.PrintEmptyLine)
+			).Print(os.Stdout, false, internal.Config.Summarize, internal.Config.PrintEmptyLine, internal.Config.Seconds)
 		} else {
 			bcs.GetBulkTimesheet(
 				pkg.NewHttpClient(),
@@ -80,7 +81,7 @@ var showBcsCmd = &cobra.Command{
 				time.Month(internal.Config.Month),
 				pkg.Project(internal.Config.Projects[0]),
 				internal.Config.Report,
-			).Print(os.Stdout, true, internal.Config.Summarize, internal.Config.PrintEmptyLine)
+			).Print(os.Stdout, true, internal.Config.Summarize, internal.Config.PrintEmptyLine, internal.Config.Seconds)
 		}
 	},
 }
@@ -99,7 +100,7 @@ var showJiraCmd = &cobra.Command{
 				internal.Config.Year,
 				time.Month(internal.Config.Month),
 				internal.Projects(internal.Config.Projects),
-			).Print(os.Stdout, false, internal.Config.Summarize, internal.Config.PrintEmptyLine)
+			).Print(os.Stdout, false, internal.Config.Summarize, internal.Config.PrintEmptyLine, internal.Config.Seconds)
 		} else {
 			jira.GetBulkTimesheet(
 				pkg.NewHttpClient(),
@@ -109,7 +110,7 @@ var showJiraCmd = &cobra.Command{
 				time.Month(internal.Config.Month),
 				internal.Projects(internal.Config.Projects),
 				internal.Users(internal.Config.Users),
-			).Print(os.Stdout, true, internal.Config.Summarize, internal.Config.PrintEmptyLine)
+			).Print(os.Stdout, true, internal.Config.Summarize, internal.Config.PrintEmptyLine, internal.Config.Seconds)
 		}
 	},
 }

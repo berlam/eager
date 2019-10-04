@@ -3,6 +3,7 @@ package pkg
 import (
 	"bytes"
 	"encoding/csv"
+	"fmt"
 	"io"
 	"log"
 	"strings"
@@ -195,13 +196,13 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 	for _, effort := range ts {
 		if currentUser != nil && currentUser.DisplayName != effort.User.DisplayName {
 			if currentDate.Day() > 1 {
-				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser)
+				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser, seconds)
 			}
 			currentUser = effort.User
 			currentDate = time.Date(effort.Date.Year(), time.Month(effort.Date.Month()), 1, 0, 0, 0, 0, time.UTC)
 		}
 		if printEmptyLine {
-			emptyLinesForDaysBetween(csvw, spec, currentDate, effort.Date, effort.User)
+			emptyLinesForDaysBetween(csvw, spec, currentDate, effort.Date, effort.User, seconds)
 			currentDate = effort.Date.AddDate(0, 0, 1)
 		}
 
@@ -236,20 +237,26 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 		}
 	}
 	if printEmptyLine && currentDate.Day() > 1 {
-		emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser)
+		emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser, seconds)
 	}
 	csvw.Flush()
 }
 
-func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to time.Time, user *User) {
+func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to time.Time, user *User, seconds bool) {
 	result := make([]string, spec.fields)
-	if spec.user.enabled {
+	if spec.user.enabled && user != nil {
 		result[spec.user.index] = user.DisplayName
 	}
 	if spec.duration.enabled {
 		var duration time.Duration
 		duration = 0
-		result[spec.duration.index] = duration.String()
+		var text string
+		if seconds {
+			text = fmt.Sprintf("%.0f", duration.Seconds())
+		} else {
+			text = duration.String()
+		}
+		result[spec.duration.index] = text
 	}
 	for i := int(to.Sub(from).Truncate(time.Hour*24).Hours() / 24); i > 0; i-- {
 		if spec.date.enabled {

@@ -188,31 +188,11 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 		}
 	}
 
-	date := time.Date(ts[0].Date.Year(), time.Month(ts[0].Date.Month()), 1, 0, 0, 0, 0, time.UTC)
+	currentDate := time.Date(ts[0].Date.Year(), time.Month(ts[0].Date.Month()), 1, 0, 0, 0, 0, time.UTC)
 	for _, effort := range ts {
 		if printEmptyLine {
-			for e := range result {
-				result[e] = ""
-			}
-			for i := int(effort.Date.Sub(date).Truncate(time.Hour * 24).Hours() / 24); i > 0; i-- {
-				if spec.user.enabled {
-					result[spec.user.index] = string(effort.User)
-				}
-				if spec.date.enabled {
-					result[spec.date.index] = date.Format(IsoYearMonthDay)
-					date = date.Add(time.Hour * 24)
-				}
-				if spec.duration.enabled {
-					var duration time.Duration
-					duration = 0
-					result[spec.duration.index] = duration.String()
-				}
-				err := csvw.Write(result)
-				if err != nil {
-					log.Println(err)
-				}
-			}
-			date = date.Add(time.Hour * 24)
+			emptyLinesForDaysBetween(csvw, spec, currentDate, effort.Date, effort.User)
+			currentDate = effort.Date.AddDate(0, 0, 1)
 		}
 
 		if spec.user.enabled {
@@ -239,5 +219,30 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 			log.Println(err)
 		}
 	}
+	if printEmptyLine {
+		emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), ts[0].User)
+	}
 	csvw.Flush()
+}
+
+func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to time.Time, user User) {
+	result := make([]string, spec.fields)
+	if spec.user.enabled {
+		result[spec.user.index] = string(user)
+	}
+	if spec.duration.enabled {
+		var duration time.Duration
+		duration = 0
+		result[spec.duration.index] = duration.String()
+	}
+	for i := int(to.Sub(from).Truncate(time.Hour*24).Hours() / 24); i > 0; i-- {
+		if spec.date.enabled {
+			result[spec.date.index] = from.Format(IsoYearMonthDay)
+		}
+		from = from.AddDate(0, 0, 1)
+		err := csvw.Write(result)
+		if err != nil {
+			log.Println(err)
+		}
+	}
 }

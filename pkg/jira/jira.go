@@ -48,15 +48,17 @@ func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo)
 	}
 	// There are "Cloud" and "Server" deployment types.
 	if strings.ToLower(result.DeploymentType) == "cloud" {
+		path, _ := server.Parse(v3.BasePath)
 		return &v3.Api{
 			Client:   client,
-			Server:   server,
+			Server:   path,
 			Userinfo: userinfo,
 		}, nil
 	}
+	path, _ := server.Parse(v2.BasePath)
 	return &v2.Api{
 		Client:   client,
-		Server:   server,
+		Server:   path,
 		Userinfo: userinfo,
 	}, nil
 }
@@ -121,7 +123,7 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	}
 
 	if users != nil && len(users) > 0 {
-		accounts, err := api.Accounts(projects, users)
+		accounts, err := accounts(api, projects, users)
 		if err != nil {
 			log.Println("Could not get user.", err)
 			return pkg.Timesheet{}
@@ -168,6 +170,32 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	}
 
 	return timesheet
+}
+
+func accounts(api model.Api, projects []pkg.Project, users []pkg.User) (map[pkg.User]model.Account, error) {
+	result := make(map[pkg.User]model.Account, len(users))
+	c := make(chan error)
+	var wg sync.WaitGroup
+	wg.Add(len(users))
+	for _, user := range users {
+		go func(user pkg.User) {
+			defer wg.Done()
+			account, err := api.User(user, projects)
+			if err != nil {
+				c <- err
+				return
+			}
+			result[user] = account
+		}(user)
+	}
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	for err := range c {
+		return nil, err
+	}
+	return result, nil
 }
 
 type serverInfo struct {

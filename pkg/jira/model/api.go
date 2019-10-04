@@ -15,7 +15,6 @@ type IssueKey string
 
 type Api interface {
 	ProjectAccessor
-	AccountAccessor
 	UserAccessor
 	IssueAccessor
 	WorklogAccessor
@@ -23,10 +22,6 @@ type Api interface {
 
 type ProjectAccessor interface {
 	Projects(startAt int) ([]pkg.Project, error)
-}
-
-type AccountAccessor interface {
-	Accounts(projects []pkg.Project, users []pkg.User) (map[pkg.User]Account, error)
 }
 
 type UserAccessor interface {

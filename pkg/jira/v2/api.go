@@ -259,6 +259,5 @@ func (effort worklogItem) Comment() pkg.Description {
 }
 
 func (effort worklogItem) Duration() time.Duration {
-	duration, _ := time.ParseDuration(strconv.Itoa(effort.TimeSpentSeconds) + "s")
-	return duration
+	return time.Duration(effort.TimeSpentSeconds) * time.Second
 }

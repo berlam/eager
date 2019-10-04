@@ -188,8 +188,16 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 		}
 	}
 
+	currentUser := ts[0].User
 	currentDate := time.Date(ts[0].Date.Year(), time.Month(ts[0].Date.Month()), 1, 0, 0, 0, 0, time.UTC)
 	for _, effort := range ts {
+		if currentUser != effort.User {
+			if currentDate.Day() > 1 {
+				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser)
+			}
+			currentUser = effort.User
+			currentDate = time.Date(effort.Date.Year(), time.Month(effort.Date.Month()), 1, 0, 0, 0, 0, time.UTC)
+		}
 		if printEmptyLine {
 			emptyLinesForDaysBetween(csvw, spec, currentDate, effort.Date, effort.User)
 			currentDate = effort.Date.AddDate(0, 0, 1)
@@ -219,8 +227,8 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 			log.Println(err)
 		}
 	}
-	if printEmptyLine {
-		emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), ts[0].User)
+	if printEmptyLine && currentDate.Day() > 1 {
+		emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser)
 	}
 	csvw.Flush()
 }

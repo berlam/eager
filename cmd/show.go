@@ -65,7 +65,7 @@ var showBcsCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if internal.Config.Projects == nil {
+		if internal.Config.Projects == nil || len(internal.Config.Projects) == 0 {
 			bcs.GetTimesheet(
 				pkg.NewHttpClient(),
 				internal.Config.Server(),
@@ -81,7 +81,7 @@ var showBcsCmd = &cobra.Command{
 				internal.Config.Userinfo(),
 				internal.Config.Year,
 				time.Month(internal.Config.Month),
-				internal.Config.Projects[0],
+				pkg.Project(internal.Config.Projects[0]),
 				internal.Config.Report,
 			).Print(os.Stdout, true, internal.Config.Summarize, internal.Config.PrintEmptyLine)
 		}
@@ -94,14 +94,14 @@ var showJiraCmd = &cobra.Command{
 	Long:  "Show your worklog data from Atlassian Jira.",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		if internal.Config.Users == nil {
+		if internal.Config.Users == nil || len(internal.Config.Users) == 0 {
 			jira.GetTimesheet(
 				pkg.NewHttpClient(),
 				internal.Config.Server(),
 				internal.Config.Userinfo(),
 				internal.Config.Year,
 				time.Month(internal.Config.Month),
-				internal.Config.Projects,
+				internal.Projects(internal.Config.Projects),
 			).Print(os.Stdout, false, internal.Config.Summarize, internal.Config.PrintEmptyLine)
 		} else {
 			jira.GetBulkTimesheet(
@@ -110,8 +110,8 @@ var showJiraCmd = &cobra.Command{
 				internal.Config.Userinfo(),
 				internal.Config.Year,
 				time.Month(internal.Config.Month),
-				internal.Config.Projects,
-				internal.Config.Users,
+				internal.Projects(internal.Config.Projects),
+				internal.Users(internal.Config.Users),
 			).Print(os.Stdout, true, internal.Config.Summarize, internal.Config.PrintEmptyLine)
 		}
 	},

@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"eager/pkg"
 	"net/url"
 )
 
@@ -20,6 +21,22 @@ const (
 	FlagAll            = "all"
 	FlagForce          = "force"
 )
+
+func Projects(projects []string) []pkg.Project {
+	result := make([]pkg.Project, len(projects))
+	for i, project := range projects {
+		result[i] = pkg.Project(project)
+	}
+	return result
+}
+
+func Users(users []string) []pkg.User {
+	result := make([]pkg.User, len(users))
+	for i, user := range users {
+		result[i] = pkg.User(user)
+	}
+	return result
+}
 
 type Configuration struct {
 	Insecure       bool     `mapstructure:"insecure"`
@@ -56,4 +73,8 @@ func (c *Configuration) Userinfo() *url.Userinfo {
 		return url.User(c.Username)
 	}
 	return nil
+}
+
+func (c *Configuration) UsersArray() {
+
 }

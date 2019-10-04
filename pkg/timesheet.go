@@ -7,7 +7,7 @@ import (
 )
 
 type Effort struct {
-	Employee    Employee
+	User        User
 	Project     Project
 	Task        Task
 	Description Description
@@ -15,7 +15,7 @@ type Effort struct {
 	Duration    time.Duration
 }
 
-type Employee string
+type User string
 
 type Project string
 
@@ -25,10 +25,10 @@ type Description string
 
 type Timesheet []Effort
 
-func (ts Timesheet) sortByEmployeeAndDateAndProjectAndTask() Timesheet {
+func (ts Timesheet) sortByUserAndDateAndProjectAndTask() Timesheet {
 	sort.Slice(ts, func(i, j int) bool {
-		if ts[i].Employee != ts[j].Employee {
-			return ts[i].Employee < ts[j].Employee
+		if ts[i].User != ts[j].User {
+			return ts[i].User < ts[j].User
 		}
 		if ts[i].Date != ts[j].Date {
 			return ts[i].Date.Before(ts[j].Date)
@@ -46,15 +46,15 @@ func (ts Timesheet) sortByEmployeeAndDateAndProjectAndTask() Timesheet {
 
 func (ts Timesheet) summarize() Timesheet {
 	type Key struct {
-		Employee
+		User
 		time.Time
 	}
 	sum := map[Key]*Effort{}
 	for _, effort := range ts {
-		tmp := sum[Key{effort.Employee, effort.Date}]
+		tmp := sum[Key{effort.User, effort.Date}]
 		if tmp == nil {
-			sum[Key{effort.Employee, effort.Date}] = &Effort{
-				Employee: effort.Employee,
+			sum[Key{effort.User, effort.Date}] = &Effort{
+				User:     effort.User,
 				Date:     effort.Date,
 				Duration: effort.Duration,
 			}
@@ -71,12 +71,12 @@ func (ts Timesheet) summarize() Timesheet {
 	return timesheet
 }
 
-func (ts Timesheet) Print(writer io.Writer, employee, summarize, printEmptyLine bool) {
-	spec := NewCsvSpecification().Employee(employee).Date(true).Project(!summarize).Task(!summarize).Duration(true).Description(!summarize)
+func (ts Timesheet) Print(writer io.Writer, user, summarize, printEmptyLine bool) {
+	spec := NewCsvSpecification().User(user).Date(true).Project(!summarize).Task(!summarize).Duration(true).Description(!summarize)
 
 	timesheet := ts
 	if summarize {
 		timesheet = timesheet.summarize()
 	}
-	timesheet.sortByEmployeeAndDateAndProjectAndTask().WriteCsv(writer, &spec, printEmptyLine)
+	timesheet.sortByUserAndDateAndProjectAndTask().WriteCsv(writer, &spec, printEmptyLine)
 }

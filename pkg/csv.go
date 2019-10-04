@@ -12,7 +12,7 @@ import (
 type CsvSpecification struct {
 	fields      int
 	header      bool
-	employee    *CsvProperty
+	user        *CsvProperty
 	project     *CsvProperty
 	task        *CsvProperty
 	description *CsvProperty
@@ -29,7 +29,7 @@ func NewCsvSpecification() CsvSpecification {
 	return CsvSpecification{
 		fields:      0,
 		header:      false,
-		employee:    newCsvProperty(),
+		user:        newCsvProperty(),
 		project:     newCsvProperty(),
 		task:        newCsvProperty(),
 		description: newCsvProperty(),
@@ -55,9 +55,9 @@ func (spec CsvSpecification) Skip() CsvSpecification {
 	return spec
 }
 
-func (spec CsvSpecification) Employee(enable bool) CsvSpecification {
+func (spec CsvSpecification) User(enable bool) CsvSpecification {
 	if enable {
-		spec.addField(spec.employee)
+		spec.addField(spec.user)
 	}
 	return spec
 }
@@ -130,8 +130,8 @@ func (ts Timesheet) ReadCsv(data []byte, spec *CsvSpecification) (Timesheet, err
 		}
 
 		effort := Effort{}
-		if spec.employee.enabled {
-			effort.Employee = Employee(row[spec.employee.index])
+		if spec.user.enabled {
+			effort.User = User(row[spec.user.index])
 		}
 		if spec.project.enabled {
 			effort.Project = Project(row[spec.project.index])
@@ -164,8 +164,8 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 	var result = make([]string, spec.fields)
 
 	if spec.header {
-		if spec.employee.enabled {
-			result[spec.employee.index] = "Employee"
+		if spec.user.enabled {
+			result[spec.user.index] = "User"
 		}
 		if spec.project.enabled {
 			result[spec.project.index] = "Project"
@@ -194,9 +194,9 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 			for e := range result {
 				result[e] = ""
 			}
-			for i := int(effort.Date.Sub(date).Truncate(time.Hour*24).Hours() / 24); i > 0; i-- {
-				if spec.employee.enabled {
-					result[spec.employee.index] = string(effort.Employee)
+			for i := int(effort.Date.Sub(date).Truncate(time.Hour * 24).Hours() / 24); i > 0; i-- {
+				if spec.user.enabled {
+					result[spec.user.index] = string(effort.User)
 				}
 				if spec.date.enabled {
 					result[spec.date.index] = date.Format(IsoYearMonthDay)
@@ -215,8 +215,8 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 			date = date.Add(time.Hour * 24)
 		}
 
-		if spec.employee.enabled {
-			result[spec.employee.index] = string(effort.Employee)
+		if spec.user.enabled {
+			result[spec.user.index] = string(effort.User)
 		}
 		if spec.project.enabled {
 			result[spec.project.index] = string(effort.Project)

@@ -20,18 +20,26 @@ func (query jql) me() jql {
 	return jql(append(query, fmt.Sprintf(jqlWorklogAuthor, currentUser)))
 }
 
-func (query jql) projects(projects ...string) jql {
-	if projects == nil {
+func (query jql) projects(projects ...pkg.Project) jql {
+	if projects == nil || len(projects) == 0 {
 		return query
 	}
-	return jql(append(query, fmt.Sprintf(jqlWorklogProject, strings.Join(projects, "','"))))
+	result := make([]string, len(projects))
+	for i, project := range projects {
+		result[i] = string(project)
+	}
+	return jql(append(query, fmt.Sprintf(jqlWorklogProject, strings.Join(result, "','"))))
 }
 
-func (query jql) users(users ...string) jql {
-	if users == nil {
+func (query jql) users(users ...pkg.User) jql {
+	if users == nil || len(users) == 0 {
 		return query
 	}
-	return jql(append(query, fmt.Sprintf(jqlWorklogAuthor, "'"+strings.Join(users, "','")+"'")))
+	result := make([]string, len(users))
+	for i, user := range users {
+		result[i] = string(user)
+	}
+	return jql(append(query, fmt.Sprintf(jqlWorklogAuthor, "'"+strings.Join(result, "','")+"'")))
 }
 
 func (query jql) between(fromDate, toDate time.Time) jql {

@@ -85,6 +85,9 @@ func (api Api) User(user *pkg.User) (model.Account, *time.Location, error) {
 		return "", nil, err
 	}
 	if response.StatusCode != 200 {
+		if response.StatusCode == 404 {
+			return "", nil, fmt.Errorf("found no user for %s", user.DisplayName)
+		}
 		return "", nil, fmt.Errorf(response.Status)
 	}
 

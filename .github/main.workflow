@@ -15,8 +15,15 @@ action "Filter for master" {
   args = "branch master"
 }
 
-action "Build" {
+action "Test" {
   needs = ["Filter for master"]
+  uses = "docker://golang:1.12-stretch"
+  runs = ["sh", "-c", "$GITHUB_WORKSPACE/.github/test.sh"]
+  secrets = ["EAGER_ATLASSIAN_CLOUD_URL","EAGER_ATLASSIAN_CLOUD_USER","EAGER_ATLASSIAN_CLOUD_TOKEN"]
+}
+
+action "Build" {
+  needs = ["Test"]
   uses = "docker://golang:1.12-stretch"
   runs = ["sh", "-c", "$GITHUB_WORKSPACE/.github/build.sh"]
 }

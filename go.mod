@@ -5,6 +5,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.5.0 // indirect
 	github.com/docker/go-connections v0.4.0
 	github.com/headzoo/surf v1.0.0
+	github.com/headzoo/ut v0.0.0-20181013193318-a13b5a7a02ca // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.0
 	github.com/morikuni/aec v0.0.0-20170113033406-39771216ff4c // indirect

@@ -2,9 +2,9 @@ package jira
 
 import (
 	"eager/pkg"
+	"eager/pkg/jira/cloud"
 	"eager/pkg/jira/model"
 	"eager/pkg/jira/v2"
-	"eager/pkg/jira/v3"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -48,8 +48,8 @@ func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo)
 	}
 	// There are "Cloud" and "Server" deployment types.
 	if strings.ToLower(result.DeploymentType) == "cloud" {
-		path, _ := server.Parse(v3.BasePath)
-		return &v3.Api{
+		path, _ := server.Parse(cloud.BasePath)
+		return &cloud.Api{
 			Client:   client,
 			Server:   path,
 			Userinfo: userinfo,

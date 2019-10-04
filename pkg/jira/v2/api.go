@@ -74,7 +74,7 @@ func (api Api) User(user pkg.User, projects []pkg.Project) (model.Account, error
 	for i, project := range projects {
 		projectQueryPart[i] = string(project)
 	}
-	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUserUrl, strings.Join(projectQueryPart, ","), user))
+	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUserUrl, strings.Join(projectQueryPart, ","), url.QueryEscape(string(user))))
 	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, userUrl, api.Userinfo, nil)
 	if err != nil {
 		return "", err
@@ -94,7 +94,7 @@ func (api Api) User(user pkg.User, projects []pkg.Project) (model.Account, error
 		return "", fmt.Errorf(response.Status)
 	}
 
-	var result= make([]userQueryResult, 0, 2)
+	var result = make([]userQueryResult, 0, 2)
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return "", err
@@ -135,7 +135,7 @@ func (api Api) Issues(jql model.Jql, startAt int) (model.Account, []model.Issue,
 		return "", nil, fmt.Errorf(response.Status)
 	}
 
-	var result= issueQueryResult{}
+	var result = issueQueryResult{}
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return "", nil, err
@@ -172,7 +172,7 @@ func (api Api) Worklog(key model.IssueKey, startAt int) ([]model.Worklog, error)
 		return nil, fmt.Errorf(response.Status)
 	}
 
-	var result= worklogQueryResult{}
+	var result = worklogQueryResult{}
 	err = json.Unmarshal(data, &result)
 	items := result.worklogs()
 	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {

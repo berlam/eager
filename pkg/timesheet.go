@@ -1,6 +1,7 @@
 package pkg
 
 import (
+	"eager/internal"
 	"io"
 	"sort"
 	"strings"
@@ -20,6 +21,24 @@ type Effort struct {
 type User struct {
 	DisplayName string
 	TimeZone    *time.Location
+}
+
+func Projects(projects []string) []Project {
+	result := make([]Project, len(projects))
+	for i, project := range projects {
+		result[i] = Project(project)
+	}
+	return result
+}
+
+func Users(users []string) []*User {
+	result := make([]*User, len(users))
+	for i, user := range users {
+		result[i] = &User{
+			DisplayName: user,
+		}
+	}
+	return result
 }
 
 type Project string
@@ -104,12 +123,13 @@ func (ts Timesheet) summarize() Timesheet {
 	return timesheet
 }
 
-func (ts Timesheet) Print(writer io.Writer, user, summarize, printEmptyLine, seconds bool) {
+func (ts Timesheet) Print(writer io.Writer, user bool, opts *internal.DurationOptions) {
+	summarize := opts.Summarize
 	spec := NewCsvSpecification().User(user).Date(true).Project(!summarize).Task(!summarize).Duration(true).Description(!summarize)
 
 	timesheet := ts
 	if summarize {
 		timesheet = timesheet.summarize()
 	}
-	timesheet.sortByUserAndDateAndProjectAndTask().WriteCsv(writer, &spec, printEmptyLine, seconds)
+	timesheet.sortByUserAndDateAndProjectAndTask().WriteCsv(writer, &spec, opts)
 }

@@ -10,21 +10,22 @@ import (
 	"os"
 )
 
-var cfgFile string
+var conf internal.Configuration
 
 func init() {
 	cobra.OnInitialize(func() {
-		if cfgFile != "" {
+		conf, _ := rootCmd.PersistentFlags().GetString(internal.FlagConfiguration)
+		if conf != "" {
 			// Use Configuration file from the flag.
-			viper.SetConfigFile(cfgFile)
+			viper.SetConfigFile(conf)
 		}
 	})
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "specify the configuration file")
-	rootCmd.PersistentFlags().BoolVarP(&internal.Config.Insecure, internal.FlagInsecure, "k", false, "use http instead of https")
-	rootCmd.PersistentFlags().StringVarP(&internal.Config.Host, internal.FlagHost, "H", "", "specify the host to use for effort query")
-	rootCmd.PersistentFlags().StringVarP(&internal.Config.Username, internal.FlagUsername, "u", "", "specify the username to use for server authentication")
-	rootCmd.PersistentFlags().StringVarP(&internal.Config.Password, internal.FlagPassword, "p", "", "specify the password to use for server authentication")
+	rootCmd.PersistentFlags().StringP(internal.FlagConfiguration, "c", "", "specify the configuration file")
+	rootCmd.PersistentFlags().BoolVarP(&conf.Http, internal.FlagHttp, "k", false, "use http instead of https")
+	rootCmd.PersistentFlags().StringVarP(&conf.Host, internal.FlagHost, "H", "", "specify the host to use for effort query")
+	rootCmd.PersistentFlags().StringVarP(&conf.Username, internal.FlagUsername, "u", "", "specify the username to use for server authentication")
+	rootCmd.PersistentFlags().StringVarP(&conf.Password, internal.FlagPassword, "p", "", "specify the password to use for server authentication")
 	rootCmd.MarkPersistentFlagRequired(internal.FlagHost)
 }
 
@@ -34,14 +35,14 @@ var rootCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Version: internal.Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cfgFile != "" {
+		if viper.ConfigFileUsed() != "" {
 			viper.BindPFlags(cmd.Flags())
 			if err := viper.ReadInConfig(); err != nil {
 				if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-					return fmt.Errorf("can't read configuration. %s", err.Error())
+					return fmt.Errorf("can't read conf. %s", err.Error())
 				}
 			}
-			viper.Unmarshal(&internal.Config)
+			viper.Unmarshal(&conf)
 		}
 		// Remove required annotation if the user has that flag given with viper.
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {

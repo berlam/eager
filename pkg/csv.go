@@ -2,6 +2,7 @@ package pkg
 
 import (
 	"bytes"
+	"eager/internal"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -157,7 +158,7 @@ func (ts Timesheet) ReadCsv(data []byte, spec *CsvSpecification) (Timesheet, err
 	}
 }
 
-func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmptyLine, seconds bool) {
+func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, opts *internal.DurationOptions) {
 	if len(ts) == 0 {
 		return
 	}
@@ -196,13 +197,13 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 	for _, effort := range ts {
 		if currentUser != nil && currentUser.DisplayName != effort.User.DisplayName {
 			if currentDate.Day() > 1 {
-				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser, seconds)
+				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser, opts.Decimal)
 			}
 			currentUser = effort.User
 			currentDate = time.Date(effort.Date.Year(), time.Month(effort.Date.Month()), 1, 0, 0, 0, 0, time.UTC)
 		}
-		if printEmptyLine {
-			emptyLinesForDaysBetween(csvw, spec, currentDate, effort.Date, effort.User, seconds)
+		if opts.Empty {
+			emptyLinesForDaysBetween(csvw, spec, currentDate, effort.Date, effort.User, opts.Decimal)
 			currentDate = effort.Date.AddDate(0, 0, 1)
 		}
 
@@ -223,8 +224,12 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 		}
 		if spec.duration.enabled {
 			var duration string
-			if seconds {
-				duration = fmt.Sprintf("%.0f", effort.Duration.Seconds())
+			if opts.Decimal {
+				hours := effort.Duration.Hours()
+				if opts.Negate {
+					hours = -hours
+				}
+				duration = fmt.Sprintf("%.02f", hours)
 			} else {
 				duration = effort.Duration.String()
 			}
@@ -236,13 +241,13 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 			log.Println(err)
 		}
 	}
-	if printEmptyLine && currentDate.Day() > 1 {
-		emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser, seconds)
+	if opts.Empty && currentDate.Day() > 1 {
+		emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser, opts.Decimal)
 	}
 	csvw.Flush()
 }
 
-func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to time.Time, user *User, seconds bool) {
+func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to time.Time, user *User, decimal bool) {
 	result := make([]string, spec.fields)
 	if spec.user.enabled && user != nil {
 		result[spec.user.index] = user.DisplayName
@@ -251,8 +256,8 @@ func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to
 		var duration time.Duration
 		duration = 0
 		var text string
-		if seconds {
-			text = fmt.Sprintf("%.0f", duration.Seconds())
+		if decimal {
+			text = fmt.Sprintf("%.02f", duration.Hours())
 		} else {
 			text = duration.String()
 		}

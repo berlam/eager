@@ -1,0 +1,30 @@
+POST http://localhost:32817/rest/api/2/project
+Content-Type: application/json
+Authorization: Basic admin admin
+
+{
+  "key": "TEST",
+  "name": "Test",
+  "lead": "admin",
+  "projectTypeKey": "business"
+}
+
+###
+
+POST http://localhost:32817/rest/api/2/issue
+Content-Type: application/json
+Authorization: Basic admin admin
+
+{
+  "fields": {
+    "project": {
+      "id": "10000"
+    },
+    "summary": "Test",
+    "issuetype": {
+      "id": "10000"
+    }
+  }
+}
+
+###

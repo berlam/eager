@@ -17,7 +17,7 @@ type Api interface {
 
 type UserAccessor interface {
 	Me() (Account, *time.Location, error)
-	User(user *pkg.User, projects []pkg.Project) (Account, *time.Location, error)
+	User(user *pkg.User) (Account, *time.Location, error)
 }
 
 type IssueAccessor interface {

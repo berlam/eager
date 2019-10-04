@@ -91,7 +91,7 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 		return pkg.Timesheet{}
 	}
 
-	accounts, err := accounts(api, projects, users)
+	accounts, err := accounts(api, users)
 	if err != nil {
 		log.Println("Could not get user.", err)
 		return pkg.Timesheet{}
@@ -158,7 +158,7 @@ func do(api model.Api, year int, month time.Month, projects []pkg.Project, accou
 	return timesheet
 }
 
-func accounts(api model.Api, projects []pkg.Project, users []*pkg.User) (map[model.Account]*pkg.User, error) {
+func accounts(api model.Api, users []*pkg.User) (map[model.Account]*pkg.User, error) {
 	result := make(map[model.Account]*pkg.User, len(users))
 	c := make(chan error)
 	var wg sync.WaitGroup
@@ -166,7 +166,7 @@ func accounts(api model.Api, projects []pkg.Project, users []*pkg.User) (map[mod
 	for _, user := range users {
 		go func(user *pkg.User) {
 			defer wg.Done()
-			account, location, err := api.User(user, projects)
+			account, location, err := api.User(user)
 			if err != nil {
 				c <- err
 				return

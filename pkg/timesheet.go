@@ -20,6 +20,7 @@ type Effort struct {
 
 type User struct {
 	DisplayName string
+	Id          string
 	TimeZone    *time.Location
 }
 
@@ -34,8 +35,14 @@ func Projects(projects []string) []Project {
 func Users(users []string) []*User {
 	result := make([]*User, len(users))
 	for i, user := range users {
+		parts := strings.SplitN(user, "=", 2)
+		id := ""
+		if len(parts) == 2 {
+			id = parts[1]
+		}
 		result[i] = &User{
-			DisplayName: user,
+			DisplayName: parts[0],
+			Id:          id,
 		}
 	}
 	return result

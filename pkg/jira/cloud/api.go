@@ -35,8 +35,8 @@ func (api Api) Me() (model.Account, *time.Location, error) {
 	return api.previousVersion().Me()
 }
 
-func (api Api) User(user *pkg.User, projects []pkg.Project) (model.Account, *time.Location, error) {
-	return api.previousVersion().User(user, projects)
+func (api Api) User(user *pkg.User) (model.Account, *time.Location, error) {
+	return api.previousVersion().User(user)
 }
 
 func (api Api) Issues(jql model.Jql, startAt int) ([]model.Issue, error) {

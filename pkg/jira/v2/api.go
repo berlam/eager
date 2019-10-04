@@ -12,17 +12,16 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
 const (
-	BasePath             = "/rest/api/2/"
-	myselfUrl            = "myself"
-	searchUserUrl        = "user/search?query=%s&maxResults=2"
-	searchProjectUserUrl = "user/assignable/multiProjectSearch?projectKeys=%s&query=%s&maxResults=2"
-	searchIssueUrl       = "search"
-	worklogUrl           = "issue/%s/worklog?startAt=%s"
+	BasePath       = "/rest/api/2/"
+	myselfUrl      = "myself"
+	getUserUrl     = "user?accountId=%s"
+	searchUserUrl  = "user/search?query=%s&maxResults=2"
+	searchIssueUrl = "search"
+	worklogUrl     = "issue/%s/worklog?startAt=%s"
 )
 
 type Api struct {
@@ -61,15 +60,14 @@ func (api Api) Me() (model.Account, *time.Location, error) {
 	return result.AccountId, result.Location(), nil
 }
 
-func (api Api) User(user *pkg.User, projects []pkg.Project) (model.Account, *time.Location, error) {
-	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUserUrl, url.QueryEscape(user.DisplayName)))
-	if len(projects) > 0 {
-		projectQueryPart := make([]string, len(projects))
-		for i, project := range projects {
-			projectQueryPart[i] = string(project)
-		}
-		userUrl, err = api.Server.Parse(fmt.Sprintf(searchProjectUserUrl, strings.Join(projectQueryPart, ","), url.QueryEscape(user.DisplayName)))
+func (api Api) User(user *pkg.User) (model.Account, *time.Location, error) {
+	searchUrl := searchUserUrl
+	searchPart := user.DisplayName
+	if user.Id != "" {
+		searchUrl = getUserUrl
+		searchPart = user.Id
 	}
+	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUrl, url.QueryEscape(searchPart)))
 	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, userUrl, api.Userinfo, nil)
 	if err != nil {
 		return "", nil, err
@@ -88,6 +86,15 @@ func (api Api) User(user *pkg.User, projects []pkg.Project) (model.Account, *tim
 	}
 	if response.StatusCode != 200 {
 		return "", nil, fmt.Errorf(response.Status)
+	}
+
+	if user.Id != "" {
+		var result userQueryResult
+		err = json.Unmarshal(data, &result)
+		if err != nil {
+			return "", nil, err
+		}
+		return result.AccountId, result.Location(), nil
 	}
 
 	var result = make([]userQueryResult, 0, 2)

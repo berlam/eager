@@ -2,9 +2,11 @@ package jira
 
 import (
 	"eager/pkg"
+	"eager/pkg/jira/model"
+	"eager/pkg/jira/v2"
+	"eager/pkg/jira/v3"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,13 +17,12 @@ import (
 )
 
 const (
-	headerAccountId = "X-AACCOUNTID"
-	jiraServerInfo  = "/rest/api/latest/serverInfo"
+	jiraServerInfo = "/rest/api/latest/serverInfo"
 )
 
-func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo) (Api, error) {
+func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo) (model.Api, error) {
 	infoUrl, err := server.Parse(fmt.Sprintf(jiraServerInfo))
-	response, err := createRequest(client, http.MethodGet, infoUrl, userinfo, nil)
+	response, err := pkg.CreateJsonRequest(client, http.MethodGet, infoUrl, userinfo, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -47,13 +48,17 @@ func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo)
 	}
 	// There are "Cloud" and "Server" deployment types.
 	if strings.ToLower(result.DeploymentType) == "cloud" {
-		return &v3{
-			client:   client,
-			server:   server,
-			userinfo: userinfo,
+		return &v3.Api{
+			Client:   client,
+			Server:   server,
+			Userinfo: userinfo,
 		}, nil
 	}
-	return &v2{}, nil
+	return &v2.Api{
+		Client:   client,
+		Server:   server,
+		Userinfo: userinfo,
+	}, nil
 }
 
 func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, projects []pkg.Project) pkg.Timesheet {
@@ -64,8 +69,8 @@ func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, 
 	}
 	fromDate, toDate := pkg.GetTimeRange(year, month)
 
-	jql := new(jql).between(fromDate, toDate).me().projects(projects...)
-	accountId, issues, err := api.issues(jql, 0)
+	jql := new(model.Jql).Between(fromDate, toDate).Me().Projects(projects...)
+	accountId, issues, err := api.Issues(jql, 0)
 
 	if err != nil {
 		log.Println("Could not get Jira issues.", err)
@@ -76,14 +81,14 @@ func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, 
 	var wg sync.WaitGroup
 	wg.Add(len(issues))
 	for _, item := range issues {
-		go func(item Issue) {
+		go func(item model.Issue) {
 			defer wg.Done()
-			items, err := api.worklog(item.key(), 0)
+			items, err := api.Worklog(item.Key(), 0)
 			if err != nil {
-				log.Println("Could not get effort for "+item.key(), err)
+				log.Println("Could not get effort for "+item.Key(), err)
 				return
 			}
-			c <- item.worklog(items, fromDate, toDate)[accountId]
+			c <- item.Worklog(items, fromDate, toDate)[accountId]
 		}(item)
 	}
 	go func() {
@@ -108,7 +113,7 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	fromDate, toDate := pkg.GetTimeRange(year, month)
 
 	if projects == nil || len(projects) == 0 {
-		projects, err = api.projects(0)
+		projects, err = api.Projects(0)
 		if err != nil {
 			log.Println("Could not get projects.", err)
 			return pkg.Timesheet{}
@@ -116,7 +121,7 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	}
 
 	if users != nil && len(users) > 0 {
-		accounts, err := api.accounts(projects, users)
+		accounts, err := api.Accounts(projects, users)
 		if err != nil {
 			log.Println("Could not get user.", err)
 			return pkg.Timesheet{}
@@ -128,8 +133,8 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 		}
 	}
 
-	jql := new(jql).between(fromDate, toDate).users(users...).projects(projects...)
-	_, issues, err := api.issues(jql, 0)
+	jql := new(model.Jql).Between(fromDate, toDate).Users(users...).Projects(projects...)
+	_, issues, err := api.Issues(jql, 0)
 
 	if err != nil {
 		log.Println("Could not get issues.", err)
@@ -140,16 +145,16 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	var wg sync.WaitGroup
 	wg.Add(len(issues))
 	for _, item := range issues {
-		go func(item Issue) {
+		go func(item model.Issue) {
 			defer wg.Done()
-			items, err := api.worklog(item.key(), 0)
+			items, err := api.Worklog(item.Key(), 0)
 			if err != nil {
-				log.Println("Could not get effort for "+item.key(), err)
+				log.Println("Could not get effort for "+item.Key(), err)
 				return
 			}
-			worklog := item.worklog(items, fromDate, toDate)
+			worklog := item.Worklog(items, fromDate, toDate)
 			for _, user := range users {
-				c <- worklog[Account(user)]
+				c <- worklog[model.Account(user)]
 			}
 		}(item)
 	}
@@ -165,68 +170,8 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	return timesheet
 }
 
-func createRequest(client *http.Client, httpMethod string, server *url.URL, userinfo *url.Userinfo, payload io.Reader) (*http.Response, error) {
-	request, err := http.NewRequest(httpMethod, server.String(), payload)
-	if err != nil {
-		return nil, err
-	}
-	password, _ := userinfo.Password()
-	request.SetBasicAuth(userinfo.Username(), password)
-	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Accept", "application/json")
-	response, err := client.Do(request)
-	if err != nil {
-		return nil, err
-	}
-	return response, err
-}
-
-type Account string
-
-type IssueKey string
-
-type Api interface {
-	ProjectAccessor
-	AccountAccessor
-	UserAccessor
-	IssueAccessor
-	WorklogAccessor
-}
-
-type ProjectAccessor interface {
-	projects(startAt int) ([]pkg.Project, error)
-}
-
-type AccountAccessor interface {
-	accounts(projects []pkg.Project, users []pkg.User) (map[pkg.User]Account, error)
-}
-
-type UserAccessor interface {
-	user(user pkg.User, projects []pkg.Project) (Account, error)
-}
-
-type IssueAccessor interface {
-	issues(jql jql, startAt int) (Account, []Issue, error)
-}
-
-type WorklogAccessor interface {
-	worklog(key IssueKey, startAt int) ([]Worklog, error)
-}
-
-type Issue interface {
-	key() IssueKey
-	worklog(worklog []Worklog, fromDate, toDate time.Time) map[Account]pkg.Timesheet
-}
-
-type Worklog interface {
-	isBetween(fromDate, toDate time.Time) bool
-	author() Author
-	date() time.Time
-	comment() pkg.Description
-	duration() time.Duration
-}
-
-type Author interface {
-	id() Account
-	name() string
+type serverInfo struct {
+	VersionNumbers []int  `json:"versionNumbers"`
+	DeploymentType string `json:"deploymentType"`
+	ServerTitle    string `json:"serverTitle"`
 }

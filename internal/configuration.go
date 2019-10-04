@@ -18,7 +18,6 @@ const (
 	FlagEmpty         = "empty"
 	FlagDecimal       = "decimal"
 	FlagNegate        = "negate"
-	FlagMerge         = "merge"
 	FlagYear          = "year"
 	FlagMonth         = "month"
 	FlagDay           = "day"
@@ -46,7 +45,6 @@ type DurationOptions struct {
 	Empty     bool `mapstructure:"empty"`
 	Decimal   bool `mapstructure:"decimal"`
 	Negate    bool `mapstructure:"negate"`
-	Merge     bool `mapstructure:"merge"`
 }
 
 func (c *Configuration) Server() *url.URL {

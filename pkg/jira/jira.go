@@ -100,7 +100,7 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	return do(api, year, month, projects, accounts)
 }
 
-func AddWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, day int, task pkg.Task, duration time.Duration, merge bool, confirm model.WorklogFunc) {
+func AddWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, day int, task pkg.Task, duration time.Duration, sum bool, confirm model.WorklogFunc) {
 	var err error
 	api, err := getApiVersion(client, server, userinfo)
 	if err != nil {
@@ -115,11 +115,10 @@ func AddWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo
 	}
 
 	key := model.IssueKey(task)
-	date := time.Date(year, month, day, 0, 0, 0, 0, location)
 
-	if !merge {
+	if !sum {
 		// Add new effort
-		err = api.AddWorklog(key, date, duration)
+		err = api.AddWorklog(key, adjustDateTime(location, duration, year, month, day), duration)
 		if err != nil {
 			log.Println("Could not add effort.", err)
 		}
@@ -130,7 +129,7 @@ func AddWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo
 	var effort []model.Worklog
 	err = api.Worklog(key, func(worklog model.Worklog) bool {
 		wd := worklog.Date().In(location)
-		if worklog.Author().Id() == account && date.Year() == wd.Year() && date.Month() == wd.Month() && date.Day() == wd.Day() {
+		if worklog.Author().Id() == account && year == wd.Year() && month == wd.Month() && day == wd.Day() {
 			effort = append(effort, worklog)
 		}
 		return true
@@ -146,7 +145,7 @@ func AddWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo
 	}
 
 	// Add new effort
-	err = api.AddWorklog(key, date, duration)
+	err = api.AddWorklog(key, adjustDateTime(location, duration, year, month, day), duration)
 	if err != nil {
 		log.Println("Could not add effort.", err)
 		return
@@ -161,6 +160,18 @@ func AddWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo
 			}
 		}
 	}
+}
+
+func adjustDateTime(location *time.Location, duration time.Duration, year int, month time.Month, day int) time.Time {
+	// Get the current date and time
+	// Sub the given duration
+	date := time.Now().In(location).Add(-duration)
+	// If we have a different day then, adjust the time to 00:00:00
+	// Also applies, if we are not on the current day
+	if date.Year() != year || date.Month() != month || date.Day() != day {
+		date = time.Date(year, month, day, 0, 0, 0, 0, location)
+	}
+	return date
 }
 
 func RemoveWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, day int, task pkg.Task, confirm model.WorklogFunc) {

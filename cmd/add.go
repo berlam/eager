@@ -18,7 +18,7 @@ func init() {
 	addCmd.PersistentFlags().IntVar(&conf.Month, internal.FlagMonth, int(time.Now().Month()), "specify the month")
 	addCmd.PersistentFlags().IntVar(&conf.Day, internal.FlagDay, time.Now().Day(), "specify the day")
 	addCmd.PersistentFlags().StringVar(&conf.Task, internal.FlagTask, "", "specify the task")
-	addCmd.PersistentFlags().BoolVar(&conf.Duration.Merge, internal.FlagMerge, false, "merge effort on same day and task")
+	addCmd.PersistentFlags().BoolVarP(&conf.Duration.Summarize, internal.FlagSummarize, "s", false, "sum effort on same day and task")
 	addCmd.MarkFlagRequired(internal.FlagTask)
 }
 
@@ -56,7 +56,7 @@ var addJiraCmd = &cobra.Command{
 			conf.Day,
 			pkg.Task(conf.Task),
 			duration,
-			conf.Duration.Merge,
+			conf.Duration.Summarize,
 			cli.Confirmation,
 		)
 		return nil

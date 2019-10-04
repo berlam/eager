@@ -10,6 +10,7 @@ require (
 	github.com/headzoo/ut v0.0.0-20181013193318-a13b5a7a02ca // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/magiconair/properties v1.8.0
+	github.com/mitchellh/mapstructure v1.1.2
 	github.com/morikuni/aec v0.0.0-20170113033406-39771216ff4c // indirect
 	github.com/opencontainers/runc v0.1.1 // indirect
 	github.com/spf13/afero v1.2.2 // indirect

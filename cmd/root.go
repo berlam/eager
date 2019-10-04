@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"eager/internal"
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -23,24 +25,18 @@ func init() {
 		}
 
 		// Lookup Configuration by going up the current directory
-		wd, err := os.Getwd()
+		file, err := os.Getwd()
 		if err != nil {
 			return
 		}
+		viper.SetConfigName("eager")
 		for true {
-			file := filepath.Clean(wd + string(filepath.Separator) + "eager.yaml")
-			_, err := os.Stat(file)
-			if os.IsNotExist(err) {
-				nd, err := filepath.Abs(wd + string(filepath.Separator) + "..")
-				if err != nil || nd == wd {
-					break
-				}
-				wd = nd
-				continue
+			viper.AddConfigPath(file)
+			nd, err := filepath.Abs(file + string(filepath.Separator) + "..")
+			if err != nil || nd == file {
+				break
 			}
-			// Found Configuration file
-			viper.SetConfigFile(file)
-			break
+			file = nd
 		}
 	})
 
@@ -58,14 +54,35 @@ var rootCmd = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Version: internal.Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+			// Unbind configuration flag, otherwise argument would overwrite config file values
+			if flag.Name == internal.FlagConfiguration {
+				return
+			}
+			// Bind the rest
+			err := viper.BindPFlag(flag.Name, flag)
+			if err != nil {
+				return
+			}
+		})
+		err := viper.ReadInConfig()
 		if viper.ConfigFileUsed() != "" {
-			viper.BindPFlags(cmd.Flags())
-			if err := viper.ReadInConfig(); err != nil {
+			if err != nil {
 				if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
-					return fmt.Errorf("can't read conf. %s", err.Error())
+					return fmt.Errorf("cannot read conf. %s", err.Error())
 				}
 			}
-			viper.Unmarshal(&conf)
+			if viper.GetString(internal.FlagConfiguration) != "" {
+				known := make(map[string]*struct{})
+				err := parseConfiguration(known, viper.ConfigFileUsed())
+				if err != nil {
+					return fmt.Errorf("cannot read conf. %s", err.Error())
+				}
+			}
+			err = viper.Unmarshal(&conf)
+			if err != nil {
+				return err
+			}
 		}
 		// Remove required annotation if the user has that flag given with viper.
 		cmd.Flags().VisitAll(func(flag *pflag.Flag) {
@@ -76,6 +93,33 @@ var rootCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+func parseConfiguration(configurations map[string]*struct{}, parent string) error {
+	parent, _ = filepath.Abs(parent)
+	if configurations[parent] != nil {
+		return fmt.Errorf("there is a recursion in you configuration definition")
+	}
+	configurations[parent] = &struct{}{}
+	file, err := ioutil.ReadFile(parent)
+	if err != nil {
+		return fmt.Errorf("cannot read file %s", parent)
+	}
+	err = viper.ReadConfig(bytes.NewReader(file))
+	if err != nil {
+		return fmt.Errorf("cannot parse file %s", parent)
+	}
+	parent = viper.GetString(internal.FlagConfiguration)
+	if parent == "" {
+		// Nu further parent. Take that already read config
+		return nil
+	}
+	err = parseConfiguration(configurations, parent)
+	if err != nil {
+		return err
+	}
+	// Merge the rest
+	return viper.MergeConfig(bytes.NewReader(file))
 }
 
 func Execute() {

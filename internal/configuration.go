@@ -25,14 +25,15 @@ const (
 )
 
 type Configuration struct {
-	Http     bool            `mapstructure:"http"`
-	Host     string          `mapstructure:"host"`
-	Username string          `mapstructure:"username"`
-	Password string          `mapstructure:"password"`
-	Projects []string        `mapstructure:"projects"`
-	Users    []string        `mapstructure:"users"`
-	Report   string          `mapstructure:"report"`
-	Duration DurationOptions `mapstructure:",squash"`
+	ParentConfiguration string          `mapstructure:"configuration"`
+	Http                bool            `mapstructure:"http"`
+	Host                string          `mapstructure:"host"`
+	Username            string          `mapstructure:"username"`
+	Password            string          `mapstructure:"password"`
+	Projects            []string        `mapstructure:"projects"`
+	Users               []string        `mapstructure:"users"`
+	Report              string          `mapstructure:"report"`
+	Duration            DurationOptions `mapstructure:",squash"`
 	// These items make no sense to have inside a configuration file
 	Year  int
 	Month int

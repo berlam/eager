@@ -39,10 +39,10 @@ func (api Api) User(user *pkg.User) (model.Account, *time.Location, error) {
 	return api.previousVersion().User(user)
 }
 
-func (api Api) Issues(jql model.Jql, startAt int) ([]model.Issue, error) {
-	return api.previousVersion().Issues(jql, startAt)
+func (api Api) Issues(jql model.Jql, issueFunc model.IssueFunc) error {
+	return api.previousVersion().Issues(jql, issueFunc)
 }
 
-func (api Api) Worklog(key model.IssueKey, startAt int) ([]model.Worklog, error) {
-	return api.previousVersion().Worklog(key, startAt)
+func (api Api) Worklog(key model.IssueKey, worklogFunc model.WorklogFunc) error {
+	return api.previousVersion().Worklog(key, worklogFunc)
 }

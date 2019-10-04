@@ -114,7 +114,11 @@ func (api Api) User(user *pkg.User) (model.Account, *time.Location, error) {
 	return result[0].AccountId, result[0].Location(), nil
 }
 
-func (api Api) Issues(jql model.Jql, startAt int) ([]model.Issue, error) {
+func (api Api) Issues(jql model.Jql, issueFunc model.IssueFunc) error {
+	return api.issues(jql, 0, issueFunc)
+}
+
+func (api Api) issues(jql model.Jql, startAt int, issueFunc model.IssueFunc) error {
 	body, _ := json.Marshal(issueQuery{
 		Fields:         []string{"project"},
 		Jql:            jql.Build(),
@@ -123,7 +127,7 @@ func (api Api) Issues(jql model.Jql, startAt int) ([]model.Issue, error) {
 	searchUrl, _ := api.Server.Parse(searchIssueUrl)
 	response, err := pkg.CreateJsonRequest(api.Client, http.MethodPost, searchUrl, api.Userinfo, bytes.NewBuffer(body))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		err := response.Body.Close()
@@ -135,33 +139,36 @@ func (api Api) Issues(jql model.Jql, startAt int) ([]model.Issue, error) {
 	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if response.StatusCode != 200 {
-		return nil, fmt.Errorf(response.Status)
+		return fmt.Errorf(response.Status)
 	}
 
 	var result = issueQueryResult{}
 	err = json.Unmarshal(data, &result)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	issues := result.issues()
-	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
-		nextIssues, err := api.Issues(jql, startAt+result.MaxResults)
-		if err != nil {
-			return nil, err
-		}
-		issues = append(issues, nextIssues...)
+	for _, e := range issues {
+		issueFunc(e)
 	}
-	return issues, err
+	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		err = api.issues(jql, startAt+result.MaxResults, issueFunc)
+	}
+	return err
 }
 
-func (api Api) Worklog(key model.IssueKey, startAt int) ([]model.Worklog, error) {
+func (api Api) Worklog(key model.IssueKey, worklogFunc model.WorklogFunc) error {
+	return api.worklog(key, 0, worklogFunc)
+}
+
+func (api Api) worklog(key model.IssueKey, startAt int, worklogFunc model.WorklogFunc) error {
 	worklogUrl, err := api.Server.Parse(fmt.Sprintf(worklogUrl, string(key), strconv.Itoa(startAt)))
 	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, worklogUrl, api.Userinfo, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer func() {
 		err := response.Body.Close()
@@ -173,23 +180,22 @@ func (api Api) Worklog(key model.IssueKey, startAt int) ([]model.Worklog, error)
 	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if response.StatusCode != 200 {
-		return nil, fmt.Errorf(response.Status)
+		return fmt.Errorf(response.Status)
 	}
 
 	var result = worklogQueryResult{}
 	err = json.Unmarshal(data, &result)
 	items := result.worklogs()
-	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
-		nextItems, err := api.Worklog(key, startAt+result.MaxResults)
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, nextItems...)
+	for _, e := range items {
+		worklogFunc(e)
 	}
-	return items, nil
+	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
+		err = api.worklog(key, startAt+result.MaxResults, worklogFunc)
+	}
+	return err
 }
 
 func (result issueQueryResult) issues() []model.Issue {
@@ -208,39 +214,12 @@ func (result worklogQueryResult) worklogs() []model.Worklog {
 	return worklogs
 }
 
-func (issue issue) Key() model.IssueKey {
-	return issue.ApiKey
+func (issue issue) Project() pkg.Project {
+	return pkg.Project(issue.Fields.Project.Key)
 }
 
-func (issue issue) Worklog(accounts map[model.Account]*pkg.User, worklog []model.Worklog, fromDate, toDate time.Time) map[model.Account]pkg.Timesheet {
-	pKey := issue.Fields.Project.Key
-	iKey := issue.ApiKey
-	result := make(map[model.Account]pkg.Timesheet)
-	total := len(worklog)
-	for _, effort := range worklog {
-		account := effort.Author().Id()
-		user := accounts[account]
-		if user == nil {
-			continue
-		}
-		date := effort.Date().In(user.TimeZone)
-		date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
-		if !date.Before(fromDate) && date.Before(toDate) {
-			current := result[account]
-			if current == nil {
-				current = make(pkg.Timesheet, 0, total)
-			}
-			result[account] = append(current, pkg.Effort{
-				User:        user,
-				Description: effort.Comment(),
-				Project:     pkg.Project(pKey),
-				Task:        pkg.Task(iKey),
-				Date:        date,
-				Duration:    effort.Duration(),
-			})
-		}
-	}
-	return result
+func (issue issue) Key() model.IssueKey {
+	return issue.ApiKey
 }
 
 func (author author) Id() model.Account {

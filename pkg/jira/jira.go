@@ -115,44 +115,75 @@ func do(api model.Api, year int, month time.Month, projects []pkg.Project, accou
 	}
 
 	jql := new(model.Jql).Between(fromDate, toDate).Users(accountIds...).Projects(projects...)
-	issues, err := api.Issues(jql, 0)
 
-	if err != nil {
-		log.Println("Could not get issues.", err)
-		return pkg.Timesheet{}
-	}
+	// The chan for errors
+	errors := make(chan error)
 
-	burstLimit := 5
-	// If we do not throttle here, the server will sometimes respond with 401.
-	// That looks like a rate limit but I have not found any numbers in the docs for the cloud setup.
-	throttle := make(chan struct{}, burstLimit)
-	c := make(chan pkg.Timesheet)
-	var wg sync.WaitGroup
-	wg.Add(len(issues))
-	for _, item := range issues {
-		go func(item model.Issue) {
-			defer wg.Done()
-			throttle <- struct{}{}
-			items, err := api.Worklog(item.Key(), 0)
-			<-throttle
-			if err != nil {
-				log.Println("Could not get effort for "+item.Key(), err)
-				return
-			}
-			worklog := item.Worklog(accounts, items, fromDate, toDate)
-			for account := range accounts {
-				c <- worklog[account]
-			}
-		}(item)
-	}
+	// The chan for issues
+	issues := make(chan model.Issue)
 	go func() {
-		defer close(c)
+		defer close(issues)
+		err = api.Issues(jql, func(issue model.Issue) {
+			issues <- issue
+		})
+		if err != nil {
+			log.Println("Could not get issues.", err)
+			errors <- err
+		}
+	}()
+
+	// The chan for effort
+	effort := make(chan pkg.Effort)
+	go func() {
+		var wg sync.WaitGroup
+		throttle := make(chan struct{}, 5)
+		defer close(effort)
 		defer close(throttle)
+		for issue := range issues {
+			wg.Add(1)
+			throttle <- struct{}{}
+			go func(issue model.Issue) {
+				defer func() {
+					<-throttle
+					wg.Done()
+				}()
+				err = api.Worklog(issue.Key(), func(worklog model.Worklog) {
+					account := worklog.Author().Id()
+					user := accounts[account]
+					if user == nil {
+						return
+					}
+					date := worklog.Date().In(user.TimeZone)
+					date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+					if !date.Before(fromDate) && date.Before(toDate) {
+						effort <- pkg.Effort{
+							User:        user,
+							Description: worklog.Comment(),
+							Project:     pkg.Project(issue.Project()),
+							Task:        pkg.Task(issue.Key()),
+							Date:        date,
+							Duration:    worklog.Duration(),
+						}
+					}
+				})
+				if err != nil {
+					log.Println("Could not get effort for "+issue.Key(), err)
+					errors <- err
+				}
+			}(issue)
+		}
 		wg.Wait()
 	}()
+
 	var timesheet pkg.Timesheet
-	for effort := range c {
-		timesheet = append(timesheet, effort...)
+	go func() {
+		defer close(errors)
+		for e := range effort {
+			timesheet = append(timesheet, e)
+		}
+	}()
+	if <-errors != nil {
+		return pkg.Timesheet{}
 	}
 
 	return timesheet

@@ -3,6 +3,7 @@ package bcs
 import (
 	"eager/pkg"
 	"fmt"
+	"golang.org/x/net/html/charset"
 	"golang.org/x/net/publicsuffix"
 	"io/ioutil"
 	"log"
@@ -191,7 +192,8 @@ func retrieveEffortList(client *http.Client, server *url.URL) ([]byte, error) {
 			log.Println(err)
 		}
 	}()
-	data, err := ioutil.ReadAll(resp.Body)
+	reader, _ := charset.NewReader(resp.Body, resp.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +215,8 @@ func retrieveProjectEffortList(client *http.Client, server *url.URL) ([]byte, er
 			log.Println(err)
 		}
 	}()
-	data, err := ioutil.ReadAll(resp.Body)
+	reader, _ := charset.NewReader(resp.Body, resp.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

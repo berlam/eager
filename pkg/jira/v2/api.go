@@ -6,6 +6,7 @@ import (
 	"eager/pkg/jira/model"
 	"encoding/json"
 	"fmt"
+	"golang.org/x/net/html/charset"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -42,7 +43,8 @@ func (api Api) Projects(startAt int) ([]pkg.Project, error) {
 		}
 	}()
 
-	data, err := ioutil.ReadAll(response.Body)
+	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +88,8 @@ func (api Api) User(user pkg.User, projects []pkg.Project) (model.Account, error
 		}
 	}()
 
-	data, err := ioutil.ReadAll(response.Body)
+	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return "", err
 	}
@@ -127,7 +130,8 @@ func (api Api) Issues(jql model.Jql, startAt int) (model.Account, []model.Issue,
 	}()
 
 	account, _ := url.PathUnescape(response.Header.Get(model.HeaderAccountId))
-	data, err := ioutil.ReadAll(response.Body)
+	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return "", nil, err
 	}
@@ -164,7 +168,8 @@ func (api Api) Worklog(key model.IssueKey, startAt int) ([]model.Worklog, error)
 		}
 	}()
 
-	data, err := ioutil.ReadAll(response.Body)
+	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
 	}

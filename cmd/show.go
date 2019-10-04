@@ -83,7 +83,7 @@ var showBcsCmd = &cobra.Command{
 				conf.Userinfo(),
 				conf.Year,
 				time.Month(conf.Month),
-				pkg.Project(conf.Projects[0]),
+				pkg.Projects(conf.Projects),
 				conf.Report,
 			).Print(os.Stdout, true, &conf.Duration)
 		}

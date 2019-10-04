@@ -62,7 +62,7 @@ func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, 
 	return timesheet
 }
 
-func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, project pkg.Project, report string) pkg.Timesheet {
+func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, projects []pkg.Project, report string) pkg.Timesheet {
 	client.Jar, _ = cookiejar.New(&cookiejar.Options{
 		PublicSuffixList: publicsuffix.List,
 	})
@@ -79,23 +79,25 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 		}
 	}()
 
-	err = showProjectEffortList(client, server, url.QueryEscape(report), month, year, project)
-	if err != nil {
-		log.Println("Could not show effort list.", err)
-		return pkg.Timesheet{}
-	}
-
-	data, err := retrieveProjectEffortList(client, server)
-	if err != nil {
-		log.Println("Could not retrieve effort list.", err)
-		return pkg.Timesheet{}
-	}
-
 	timesheet := pkg.Timesheet{}
 	spec := pkg.NewCsvSpecification().Header(true).User(true).Project(true).Task(true).Description(true).Date(true).Duration(true).Skip()
-	timesheet, err = timesheet.ReadCsv(data, &spec)
-	if err != nil {
-		log.Println("Could not read effort list.", err)
+	for _, project := range projects {
+		err = showProjectEffortList(client, server, url.QueryEscape(report), month, year, project)
+		if err != nil {
+			log.Println("Could not show effort list.", err)
+			return pkg.Timesheet{}
+		}
+
+		data, err := retrieveProjectEffortList(client, server)
+		if err != nil {
+			log.Println("Could not retrieve effort list.", err)
+			return pkg.Timesheet{}
+		}
+
+		timesheet, err = timesheet.ReadCsv(data, &spec)
+		if err != nil {
+			log.Println("Could not read effort list.", err)
+		}
 	}
 
 	return timesheet

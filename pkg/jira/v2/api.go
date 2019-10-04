@@ -16,12 +16,14 @@ import (
 )
 
 const (
-	BasePath       = "/rest/api/2/"
-	myselfUrl      = "myself"
-	getUserUrl     = "user?accountId=%s"
-	searchUserUrl  = "user/search?query=%s&maxResults=2"
-	searchIssueUrl = "search"
-	worklogUrl     = "issue/%s/worklog?startAt=%s"
+	BasePath         = "/rest/api/2/"
+	myselfUrl        = "myself"
+	getUserUrl       = "user?accountId=%s"
+	searchUserUrl    = "user/search?query=%s&maxResults=2"
+	searchIssueUrl   = "search"
+	getWorklogUrl    = "issue/%s/worklog?startAt=%s"
+	addWorklogUrl    = "issue/%s/worklog?notifyUsers=false&adjustEstimate=leave"
+	removeWorklogUrl = "issue/%s/worklog/%s?notifyUsers=false&adjustEstimate=leave"
 )
 
 type Api struct {
@@ -165,7 +167,7 @@ func (api Api) Worklog(key model.IssueKey, worklogFunc model.WorklogFunc) error 
 }
 
 func (api Api) worklog(key model.IssueKey, startAt int, worklogFunc model.WorklogFunc) error {
-	worklogUrl, err := api.Server.Parse(fmt.Sprintf(worklogUrl, string(key), strconv.Itoa(startAt)))
+	worklogUrl, err := api.Server.Parse(fmt.Sprintf(getWorklogUrl, string(key), strconv.Itoa(startAt)))
 	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, worklogUrl, api.Userinfo, nil)
 	if err != nil {
 		return err
@@ -198,6 +200,50 @@ func (api Api) worklog(key model.IssueKey, startAt int, worklogFunc model.Worklo
 	return err
 }
 
+func (api Api) AddWorklog(key model.IssueKey, date time.Time, duration time.Duration) error {
+	body, _ := json.Marshal(worklogItem{
+		Started:          date.Format(pkg.IsoDateTime),
+		TimeSpentSeconds: int(duration.Truncate(time.Second).Seconds()),
+	})
+	worklogUrl, err := api.Server.Parse(fmt.Sprintf(addWorklogUrl, string(key)))
+	response, err := pkg.CreateJsonRequest(api.Client, http.MethodPost, worklogUrl, api.Userinfo, bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
+
+	if response.StatusCode != 201 {
+		return fmt.Errorf(response.Status)
+	}
+
+	return nil
+}
+
+func (api Api) RemoveWorklog(key model.IssueKey, id model.WorklogId) error {
+	worklogUrl, err := api.Server.Parse(fmt.Sprintf(removeWorklogUrl, string(key), string(id)))
+	response, err := pkg.CreateJsonRequest(api.Client, http.MethodDelete, worklogUrl, api.Userinfo, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
+
+	if response.StatusCode != 204 {
+		return fmt.Errorf(response.Status)
+	}
+
+	return nil
+}
+
 func (result issueQueryResult) issues() []model.Issue {
 	issues := make([]model.Issue, len(result.ApiIssues))
 	for idx, issue := range result.ApiIssues {
@@ -222,8 +268,20 @@ func (issue issue) Key() model.IssueKey {
 	return issue.ApiKey
 }
 
+func (issue issue) String() string {
+	return fmt.Sprintf("%s;%s", issue.Project(), issue.Key())
+}
+
 func (author author) Id() model.Account {
 	return author.AccountId
+}
+
+func (author author) String() string {
+	return fmt.Sprintf("%s;%s;%s", author.AccountId, author.EmailAddress, author.DisplayName)
+}
+
+func (effort worklogItem) Id() model.WorklogId {
+	return model.WorklogId(effort.ApiId)
 }
 
 func (effort worklogItem) Author() model.Author {
@@ -241,7 +299,7 @@ func (effort worklogItem) Date() time.Time {
 
 func (effort worklogItem) Comment() pkg.Description {
 	description := ""
-	if len(effort.ApiComment.Content) > 0 && len(effort.ApiComment.Content[0].Content) > 0 {
+	if effort.ApiComment != nil && len(effort.ApiComment.Content) > 0 && len(effort.ApiComment.Content[0].Content) > 0 {
 		description = effort.ApiComment.Content[0].Content[0].Text
 	}
 	return pkg.Description(description)
@@ -249,4 +307,8 @@ func (effort worklogItem) Comment() pkg.Description {
 
 func (effort worklogItem) Duration() time.Duration {
 	return time.Duration(effort.TimeSpentSeconds) * time.Second
+}
+
+func (effort worklogItem) String() string {
+	return fmt.Sprintf("%s;%s;%s", effort.Date().Format(pkg.IsoYearMonthDay), effort.Duration(), effort.Comment())
 }

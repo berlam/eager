@@ -9,18 +9,21 @@ type Account string
 
 type IssueKey string
 
+type WorklogId string
+
 type Api interface {
-	UserAccessor
-	IssueAccessor
-	WorklogAccessor
+	UserReader
+	IssueReader
+	WorklogReader
+	WorklogWriter
 }
 
-type UserAccessor interface {
+type UserReader interface {
 	Me() (Account, *time.Location, error)
 	User(user *pkg.User) (Account, *time.Location, error)
 }
 
-type IssueAccessor interface {
+type IssueReader interface {
 	Issues(jql Jql, issueFunc IssueFunc) error
 }
 
@@ -30,28 +33,33 @@ func (f IssueFunc) Process(issue Issue) {
 	f(issue)
 }
 
-type WorklogAccessor interface {
+type WorklogReader interface {
 	Worklog(key IssueKey, worklogFunc WorklogFunc) error
 }
 
-type WorklogFunc func(Worklog)
-
-func (f WorklogFunc) Process(worklog Worklog) {
-	f(worklog)
+type WorklogWriter interface {
+	AddWorklog(key IssueKey, date time.Time, duration time.Duration) error
+	RemoveWorklog(key IssueKey, id WorklogId) error
 }
+
+type WorklogFunc func(Worklog) bool
 
 type Issue interface {
 	Project() pkg.Project
 	Key() IssueKey
+	String() string
 }
 
 type Worklog interface {
+	Id() WorklogId
 	Author() Author
 	Date() time.Time
 	Comment() pkg.Description
 	Duration() time.Duration
+	String() string
 }
 
 type Author interface {
 	Id() Account
+	String() string
 }

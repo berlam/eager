@@ -38,8 +38,8 @@ type author struct {
 type issue struct {
 	Id     string         `json:"id"`
 	ApiKey model.IssueKey `json:"key"`
-	Fields struct {
-		Project struct {
+	Fields *struct {
+		Project *struct {
 			Id   string     `json:"id"`
 			Key  projectKey `json:"key"`
 			Name string     `json:"name"`
@@ -55,7 +55,7 @@ type issueQuery struct {
 
 type issueQueryResult struct {
 	*PaginatedResult
-	ApiIssues []issue `json:"issues"`
+	ApiIssues []*issue `json:"issues"`
 }
 
 type worklogQueryResult struct {
@@ -64,19 +64,20 @@ type worklogQueryResult struct {
 }
 
 type worklogItem struct {
-	ApiAuthor    author `json:"author"`
-	UpdateAuthor author `json:"updateAuthor"`
-	ApiComment   struct {
-		Type    string `json:"type"`
-		Version int    `json:"version"`
+	ApiId        string  `json:"id,omitempty"`
+	ApiAuthor    *author `json:"author,omitempty"`
+	UpdateAuthor *author `json:"updateAuthor,omitempty"`
+	ApiComment   *struct {
+		Type    string `json:"type,omitempty"`
+		Version int    `json:"version,omitempty"`
 		Content []*struct {
-			Type    string `json:"type"`
+			Type    string `json:"type,omitempty"`
 			Content []*struct {
-				Type string `json:"type"`
-				Text string `json:"text"`
-			} `json:"content"`
-		} `json:"content"`
+				Type string `json:"type,omitempty"`
+				Text string `json:"text,omitempty"`
+			} `json:"content,omitempty"`
+		} `json:"content,omitempty"`
 	} `json:"comment,omitempty"`
-	Started          string `json:"started"`
-	TimeSpentSeconds int    `json:"timeSpentSeconds"`
+	Started          string `json:"started,omitempty"`
+	TimeSpentSeconds int    `json:"timeSpentSeconds,omitempty"`
 }

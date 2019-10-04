@@ -46,3 +46,11 @@ func (api Api) Issues(jql model.Jql, issueFunc model.IssueFunc) error {
 func (api Api) Worklog(key model.IssueKey, worklogFunc model.WorklogFunc) error {
 	return api.previousVersion().Worklog(key, worklogFunc)
 }
+
+func (api Api) AddWorklog(key model.IssueKey, date time.Time, duration time.Duration) error {
+	return api.previousVersion().AddWorklog(key, date, duration)
+}
+
+func (api Api) RemoveWorklog(key model.IssueKey, id model.WorklogId) error {
+	return api.previousVersion().RemoveWorklog(key, id)
+}

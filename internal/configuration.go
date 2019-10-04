@@ -11,8 +11,6 @@ const (
 	FlagHost          = "host"
 	FlagUsername      = "username"
 	FlagPassword      = "password"
-	FlagYear          = "year"
-	FlagMonth         = "month"
 	FlagProjects      = "project"
 	FlagUsers         = "user"
 	FlagReport        = "report"
@@ -20,6 +18,11 @@ const (
 	FlagEmpty         = "empty"
 	FlagDecimal       = "decimal"
 	FlagNegate        = "negate"
+	FlagMerge         = "merge"
+	FlagYear          = "year"
+	FlagMonth         = "month"
+	FlagDay           = "day"
+	FlagTask          = "task"
 )
 
 type Configuration struct {
@@ -27,12 +30,15 @@ type Configuration struct {
 	Host     string          `mapstructure:"host"`
 	Username string          `mapstructure:"username"`
 	Password string          `mapstructure:"password"`
-	Year     int             `mapstructure:"year"`
-	Month    int             `mapstructure:"month"`
 	Projects []string        `mapstructure:"projects"`
 	Users    []string        `mapstructure:"users"`
 	Report   string          `mapstructure:"report"`
 	Duration DurationOptions `mapstructure:",squash"`
+	// These items make no sense to have inside a configuration file
+	Year  int
+	Month int
+	Day   int
+	Task  string
 }
 
 type DurationOptions struct {
@@ -40,6 +46,7 @@ type DurationOptions struct {
 	Empty     bool `mapstructure:"empty"`
 	Decimal   bool `mapstructure:"decimal"`
 	Negate    bool `mapstructure:"negate"`
+	Merge     bool `mapstructure:"merge"`
 }
 
 func (c *Configuration) Server() *url.URL {

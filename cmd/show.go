@@ -92,7 +92,7 @@ var showBcsCmd = &cobra.Command{
 
 var showJiraCmd = &cobra.Command{
 	Use:   "jira",
-	Short: "Show worklog data from Jira",
+	Short: "Show worklog from Jira",
 	Long:  "Show your worklog data from Atlassian Jira.",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {

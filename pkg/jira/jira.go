@@ -100,6 +100,102 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	return do(api, year, month, projects, accounts)
 }
 
+func AddWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, day int, task pkg.Task, duration time.Duration, merge bool, confirm model.WorklogFunc) {
+	var err error
+	api, err := getApiVersion(client, server, userinfo)
+	if err != nil {
+		log.Println("Could not get api version.", err)
+		return
+	}
+
+	account, location, err := api.Me()
+	if err != nil {
+		log.Println("Could not get user.", err)
+		return
+	}
+
+	key := model.IssueKey(task)
+	date := time.Date(year, month, day, 0, 0, 0, 0, location)
+
+	if !merge {
+		// Add new effort
+		err = api.AddWorklog(key, date, duration)
+		if err != nil {
+			log.Println("Could not add effort.", err)
+		}
+		return
+	}
+
+	// Check, if there is already effort inside the worklog
+	var effort []model.Worklog
+	err = api.Worklog(key, func(worklog model.Worklog) bool {
+		wd := worklog.Date().In(location)
+		if worklog.Author().Id() == account && date.Year() == wd.Year() && date.Month() == wd.Month() && date.Day() == wd.Day() {
+			effort = append(effort, worklog)
+		}
+		return true
+	})
+	if err != nil {
+		log.Println("Could not get worklog.", err)
+		return
+	}
+
+	// Collect effort for that day
+	for _, worklog := range effort {
+		duration += worklog.Duration()
+	}
+
+	// Add new effort
+	err = api.AddWorklog(key, date, duration)
+	if err != nil {
+		log.Println("Could not add effort.", err)
+		return
+	}
+
+	// Delete old effort
+	for _, worklog := range effort {
+		if confirm(worklog) {
+			err = api.RemoveWorklog(key, worklog.Id())
+			if err != nil {
+				log.Println("Could not remove effort.", err)
+			}
+		}
+	}
+}
+
+func RemoveWorklogItem(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, day int, task pkg.Task, confirm model.WorklogFunc) {
+	var err error
+	api, err := getApiVersion(client, server, userinfo)
+	if err != nil {
+		log.Println("Could not get api version.", err)
+		return
+	}
+
+	account, location, err := api.Me()
+	if err != nil {
+		log.Println("Could not get user.", err)
+		return
+	}
+
+	key := model.IssueKey(task)
+	date := time.Date(year, month, day, 0, 0, 0, 0, location)
+
+	// Check, if there is already effort inside the worklog
+	err = api.Worklog(key, func(worklog model.Worklog) bool {
+		wd := worklog.Date()
+		if worklog.Author().Id() == account && date.Year() == wd.Year() && date.Month() == wd.Month() && date.Day() == wd.Day() {
+			if confirm(worklog) {
+				err = api.RemoveWorklog(key, worklog.Id())
+				if err != nil {
+					log.Println("Could not remove effort.", err)
+					return false
+				}
+			}
+		}
+		return true
+	})
+}
+
 func do(api model.Api, year int, month time.Month, projects []pkg.Project, accounts map[model.Account]*pkg.User) pkg.Timesheet {
 	var err error
 
@@ -147,11 +243,11 @@ func do(api model.Api, year int, month time.Month, projects []pkg.Project, accou
 					<-throttle
 					wg.Done()
 				}()
-				err = api.Worklog(issue.Key(), func(worklog model.Worklog) {
+				err = api.Worklog(issue.Key(), func(worklog model.Worklog) bool {
 					account := worklog.Author().Id()
 					user := accounts[account]
 					if user == nil {
-						return
+						return true
 					}
 					date := worklog.Date().In(user.TimeZone)
 					date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
@@ -165,6 +261,7 @@ func do(api model.Api, year int, month time.Month, projects []pkg.Project, accou
 							Duration:    worklog.Duration(),
 						}
 					}
+					return true
 				})
 				if err != nil {
 					log.Println("Could not get effort for "+issue.Key(), err)

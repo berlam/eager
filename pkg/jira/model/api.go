@@ -5,10 +5,6 @@ import (
 	"time"
 )
 
-const (
-	HeaderAccountId = "X-AACCOUNTID"
-)
-
 type Account string
 
 type IssueKey string
@@ -25,11 +21,12 @@ type ProjectAccessor interface {
 }
 
 type UserAccessor interface {
-	User(user pkg.User, projects []pkg.Project) (Account, error)
+	Me() (Account, *time.Location, error)
+	User(user *pkg.User, projects []pkg.Project) (Account, *time.Location, error)
 }
 
 type IssueAccessor interface {
-	Issues(jql Jql, startAt int) (Account, []Issue, error)
+	Issues(jql Jql, startAt int) ([]Issue, error)
 }
 
 type WorklogAccessor interface {
@@ -38,11 +35,10 @@ type WorklogAccessor interface {
 
 type Issue interface {
 	Key() IssueKey
-	Worklog(accounts map[Account]pkg.User, worklog []Worklog, fromDate, toDate time.Time) map[Account]pkg.Timesheet
+	Worklog(accounts map[Account]*pkg.User, worklog []Worklog, fromDate, toDate time.Time) map[Account]pkg.Timesheet
 }
 
 type Worklog interface {
-	IsBetween(fromDate, toDate time.Time) bool
 	Author() Author
 	Date() time.Time
 	Comment() pkg.Description

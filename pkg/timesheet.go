@@ -9,7 +9,7 @@ import (
 )
 
 type Effort struct {
-	User        User
+	User        *User
 	Project     Project
 	Task        Task
 	Description Description
@@ -17,7 +17,10 @@ type Effort struct {
 	Duration    time.Duration
 }
 
-type User string
+type User struct {
+	DisplayName string
+	TimeZone    *time.Location
+}
 
 type Project string
 
@@ -28,6 +31,9 @@ type Description string
 type Timesheet []Effort
 
 func (user User) Matches(other User) bool {
+	if user.TimeZone != nil && other.TimeZone != nil && user.TimeZone != other.TimeZone {
+		return false
+	}
 	otherNormalized := other.Normalize()
 	fields := strings.Fields(user.Normalize())
 	for _, field := range fields {
@@ -44,13 +50,13 @@ func (user User) Normalize() string {
 			return -1
 		}
 		return r
-	}, string(user))
+	}, user.DisplayName)
 }
 
 func (ts Timesheet) sortByUserAndDateAndProjectAndTask() Timesheet {
 	sort.Slice(ts, func(i, j int) bool {
-		if ts[i].User != ts[j].User {
-			return ts[i].User < ts[j].User
+		if ts[i].User.DisplayName != ts[j].User.DisplayName {
+			return ts[i].User.DisplayName < ts[j].User.DisplayName
 		}
 		if ts[i].Date != ts[j].Date {
 			return ts[i].Date.Before(ts[j].Date)
@@ -68,14 +74,15 @@ func (ts Timesheet) sortByUserAndDateAndProjectAndTask() Timesheet {
 
 func (ts Timesheet) summarize() Timesheet {
 	type Key struct {
-		User
+		user string
 		time.Time
 	}
 	sum := map[Key]*Effort{}
 	for _, effort := range ts {
-		tmp := sum[Key{effort.User, effort.Date}]
+		key := Key{effort.User.DisplayName, effort.Date}
+		tmp := sum[key]
 		if tmp == nil {
-			sum[Key{effort.User, effort.Date}] = &Effort{
+			sum[key] = &Effort{
 				User:     effort.User,
 				Date:     effort.Date,
 				Duration: effort.Duration,

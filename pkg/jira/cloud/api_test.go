@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"testing"
+	"time"
 )
 
 func Test(t *testing.T) {
@@ -26,13 +27,17 @@ func Test(t *testing.T) {
 		t.Error("Project not found")
 		return
 	}
-	user, e := api.User(pkg.User("Berla Atlassian Test User 2"), projects)
-	if e != nil || user == "" {
+	user := &pkg.User{
+		DisplayName: "Berla Atlassian Test User 2",
+		TimeZone:    time.UTC,
+	}
+	account, _, e := api.User(user, projects)
+	if e != nil || account == "" {
 		t.Error("User not found")
 		return
 	}
-	jql := model.Jql{}.Users(pkg.User(user)).Projects(projects...)
-	_, issues, e := api.Issues(jql, 0)
+	jql := model.Jql{}.Users(account).Projects(projects...)
+	issues, e := api.Issues(jql, 0)
 	if e != nil || len(issues) == 0 {
 		t.Error("Issues not found")
 		return

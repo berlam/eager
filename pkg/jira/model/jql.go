@@ -11,14 +11,9 @@ const (
 	jqlWorklogDate    = "worklogDate >= '%s' AND worklogDate < '%s'"
 	jqlWorklogProject = "project in ('%s')"
 	jqlWorklogAuthor  = "worklogAuthor in (%s)"
-	currentUser       = "currentUser()"
 )
 
 type Jql []string
-
-func (query Jql) Me() Jql {
-	return Jql(append(query, fmt.Sprintf(jqlWorklogAuthor, currentUser)))
-}
 
 func (query Jql) Projects(projects ...pkg.Project) Jql {
 	if projects == nil || len(projects) == 0 {
@@ -31,7 +26,7 @@ func (query Jql) Projects(projects ...pkg.Project) Jql {
 	return Jql(append(query, fmt.Sprintf(jqlWorklogProject, strings.Join(result, "','"))))
 }
 
-func (query Jql) Users(users ...pkg.User) Jql {
+func (query Jql) Users(users ...Account) Jql {
 	if users == nil || len(users) == 0 {
 		return query
 	}

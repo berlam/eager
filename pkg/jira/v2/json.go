@@ -1,6 +1,9 @@
 package v2
 
-import "eager/pkg/jira/model"
+import (
+	"eager/pkg/jira/model"
+	"time"
+)
 
 type projectKey string
 
@@ -25,6 +28,12 @@ type projectQueryResult struct {
 type userQueryResult struct {
 	AccountId   model.Account `json:"accountId"`
 	DisplayName string        `json:"displayName"`
+	TimeZone    string        `json:"timeZone"`
+}
+
+func (result userQueryResult) Location() *time.Location {
+	location, _ := time.LoadLocation(result.TimeZone)
+	return location
 }
 
 type author struct {
@@ -78,4 +87,3 @@ type worklogItem struct {
 	Started          string `json:"started"`
 	TimeSpentSeconds int    `json:"timeSpentSeconds"`
 }
-

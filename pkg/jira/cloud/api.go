@@ -3,9 +3,10 @@ package cloud
 import (
 	"eager/pkg"
 	"eager/pkg/jira/model"
-	v2 "eager/pkg/jira/v2"
+	"eager/pkg/jira/v2"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 const (
@@ -35,11 +36,15 @@ func (api Api) Projects(startAt int) ([]pkg.Project, error) {
 	return api.previousVersion().Projects(startAt)
 }
 
-func (api Api) User(user pkg.User, projects []pkg.Project) (model.Account, error) {
+func (api Api) Me() (model.Account, *time.Location, error) {
+	return api.previousVersion().Me()
+}
+
+func (api Api) User(user *pkg.User, projects []pkg.Project) (model.Account, *time.Location, error) {
 	return api.previousVersion().User(user, projects)
 }
 
-func (api Api) Issues(jql model.Jql, startAt int) (model.Account, []model.Issue, error) {
+func (api Api) Issues(jql model.Jql, startAt int) ([]model.Issue, error) {
 	return api.previousVersion().Issues(jql, startAt)
 }
 

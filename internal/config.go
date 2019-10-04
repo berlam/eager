@@ -30,10 +30,12 @@ func Projects(projects []string) []pkg.Project {
 	return result
 }
 
-func Users(users []string) []pkg.User {
-	result := make([]pkg.User, len(users))
+func Users(users []string) []*pkg.User {
+	result := make([]*pkg.User, len(users))
 	for i, user := range users {
-		result[i] = pkg.User(user)
+		result[i] = &pkg.User{
+			DisplayName: user,
+		}
 	}
 	return result
 }

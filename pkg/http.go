@@ -4,10 +4,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 )
 
 func NewHttpClient() *http.Client {
-	return &http.Client{}
+	return &http.Client{
+		Timeout: time.Second * 60,
+	}
 }
 
 func CreateJsonRequest(client *http.Client, httpMethod string, server *url.URL, userinfo *url.Userinfo, payload io.Reader) (*http.Response, error) {

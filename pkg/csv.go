@@ -131,7 +131,9 @@ func (ts Timesheet) ReadCsv(data []byte, spec *CsvSpecification) (Timesheet, err
 
 		effort := Effort{}
 		if spec.user.enabled {
-			effort.User = User(row[spec.user.index])
+			effort.User = &User{
+				DisplayName: row[spec.user.index],
+			}
 		}
 		if spec.project.enabled {
 			effort.Project = Project(row[spec.project.index])
@@ -191,7 +193,7 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 	currentUser := ts[0].User
 	currentDate := time.Date(ts[0].Date.Year(), time.Month(ts[0].Date.Month()), 1, 0, 0, 0, 0, time.UTC)
 	for _, effort := range ts {
-		if currentUser != effort.User {
+		if currentUser.DisplayName != effort.User.DisplayName {
 			if currentDate.Day() > 1 {
 				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser)
 			}
@@ -204,7 +206,7 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 		}
 
 		if spec.user.enabled {
-			result[spec.user.index] = string(effort.User)
+			result[spec.user.index] = effort.User.DisplayName
 		}
 		if spec.project.enabled {
 			result[spec.project.index] = string(effort.Project)
@@ -233,10 +235,10 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, printEmpt
 	csvw.Flush()
 }
 
-func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to time.Time, user User) {
+func emptyLinesForDaysBetween(csvw *csv.Writer, spec *CsvSpecification, from, to time.Time, user *User) {
 	result := make([]string, spec.fields)
 	if spec.user.enabled {
-		result[spec.user.index] = string(user)
+		result[spec.user.index] = user.DisplayName
 	}
 	if spec.duration.enabled {
 		var duration time.Duration

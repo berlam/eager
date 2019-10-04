@@ -69,49 +69,42 @@ func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, 
 		log.Println("Could not get api version.", err)
 		return pkg.Timesheet{}
 	}
-	fromDate, toDate := pkg.GetTimeRange(year, month)
 
-	jql := new(model.Jql).Between(fromDate, toDate).Me().Projects(projects...)
-	accountId, issues, err := api.Issues(jql, 0)
-
+	accountId, timezone, err := api.Me()
 	if err != nil {
-		log.Println("Could not get Jira issues.", err)
+		log.Println("Could not get user.", err)
 		return pkg.Timesheet{}
 	}
-
-	c := make(chan pkg.Timesheet)
-	var wg sync.WaitGroup
-	wg.Add(len(issues))
-	for _, item := range issues {
-		go func(item model.Issue) {
-			defer wg.Done()
-			items, err := api.Worklog(item.Key(), 0)
-			if err != nil {
-				log.Println("Could not get effort for "+item.Key(), err)
-				return
-			}
-			c <- item.Worklog(map[model.Account]pkg.User{}, items, fromDate, toDate)[accountId]
-		}(item)
-	}
-	go func() {
-		defer close(c)
-		wg.Wait()
-	}()
-	var timesheet pkg.Timesheet
-	for effort := range c {
-		timesheet = append(timesheet, effort...)
+	accounts := map[model.Account]*pkg.User{}
+	accounts[accountId] = &pkg.User{
+		TimeZone: timezone,
 	}
 
-	return timesheet
+	return do(api, year, month, projects, accounts)
 }
 
-func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, projects []pkg.Project, users []pkg.User) pkg.Timesheet {
+func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, projects []pkg.Project, users []*pkg.User) pkg.Timesheet {
 	var err error
 	api, err := getApiVersion(client, server, userinfo)
 	if err != nil {
 		log.Println("Could not get api version.", err)
 		return pkg.Timesheet{}
 	}
+
+	accounts, err := accounts(api, projects, users)
+	if err != nil {
+		log.Println("Could not get user.", err)
+		return pkg.Timesheet{}
+	}
+
+	return do(api, year, month, projects, accounts)
+}
+
+func do(api model.Api, year int, month time.Month, projects []pkg.Project, accounts map[model.Account]*pkg.User) pkg.Timesheet {
+	var err error
+
+	// TODO Calculate max timezone offset for each user to have the right from and to date.
+	// The jql query uses afaik the time zone of the requesting user.
 	fromDate, toDate := pkg.GetTimeRange(year, month)
 
 	if projects == nil || len(projects) == 0 {
@@ -122,44 +115,47 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 		}
 	}
 
-	accounts, err := accounts(api, projects, users)
-	if err != nil {
-		log.Println("Could not get user.", err)
-		return pkg.Timesheet{}
-	}
 	i := 0
+	accountIds := make([]model.Account, len(accounts))
 	for account := range accounts {
-		users[i] = pkg.User(account)
+		accountIds[i] = account
 		i++
 	}
 
-	jql := new(model.Jql).Between(fromDate, toDate).Users(users...).Projects(projects...)
-	_, issues, err := api.Issues(jql, 0)
+	jql := new(model.Jql).Between(fromDate, toDate).Users(accountIds...).Projects(projects...)
+	issues, err := api.Issues(jql, 0)
 
 	if err != nil {
 		log.Println("Could not get issues.", err)
 		return pkg.Timesheet{}
 	}
 
+	burstLimit := 5
+	// If we do not throttle here, the server will sometimes respond with 401.
+	// That looks like a rate limit but I have not found any numbers in the docs for the cloud setup.
+	throttle := make(chan struct{}, burstLimit)
 	c := make(chan pkg.Timesheet)
 	var wg sync.WaitGroup
 	wg.Add(len(issues))
 	for _, item := range issues {
 		go func(item model.Issue) {
 			defer wg.Done()
+			throttle <- struct{}{}
 			items, err := api.Worklog(item.Key(), 0)
+			<-throttle
 			if err != nil {
 				log.Println("Could not get effort for "+item.Key(), err)
 				return
 			}
 			worklog := item.Worklog(accounts, items, fromDate, toDate)
-			for _, user := range users {
-				c <- worklog[model.Account(user)]
+			for account := range accounts {
+				c <- worklog[account]
 			}
 		}(item)
 	}
 	go func() {
 		defer close(c)
+		defer close(throttle)
 		wg.Wait()
 	}()
 	var timesheet pkg.Timesheet
@@ -170,20 +166,23 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	return timesheet
 }
 
-func accounts(api model.Api, projects []pkg.Project, users []pkg.User) (map[model.Account]pkg.User, error) {
-	result := make(map[model.Account]pkg.User, len(users))
+func accounts(api model.Api, projects []pkg.Project, users []*pkg.User) (map[model.Account]*pkg.User, error) {
+	result := make(map[model.Account]*pkg.User, len(users))
 	c := make(chan error)
 	var wg sync.WaitGroup
 	wg.Add(len(users))
 	for _, user := range users {
-		go func(user pkg.User) {
+		go func(user *pkg.User) {
 			defer wg.Done()
-			account, err := api.User(user, projects)
+			account, location, err := api.User(user, projects)
 			if err != nil {
 				c <- err
 				return
 			}
-			result[account] = user
+			result[account] = &pkg.User{
+				DisplayName: user.DisplayName,
+				TimeZone:    location,
+			}
 		}(user)
 	}
 	go func() {

@@ -18,6 +18,7 @@ import (
 
 const (
 	BasePath         = "/rest/api/2/"
+	myselfUrl        = "myself"
 	searchProjectUrl = "project/search?startAt=%s"
 	searchUserUrl    = "user/assignable/multiProjectSearch?projectKeys=%s&query=%s&maxResults=2"
 	searchIssueUrl   = "search"
@@ -71,54 +72,9 @@ func (api Api) Projects(startAt int) ([]pkg.Project, error) {
 	return projectKeys, nil
 }
 
-func (api Api) User(user pkg.User, projects []pkg.Project) (model.Account, error) {
-	projectQueryPart := make([]string, len(projects))
-	for i, project := range projects {
-		projectQueryPart[i] = string(project)
-	}
-	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUserUrl, strings.Join(projectQueryPart, ","), url.QueryEscape(string(user))))
-	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, userUrl, api.Userinfo, nil)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		err := response.Body.Close()
-		if err != nil {
-			log.Println("Response could not be closed.", err)
-		}
-	}()
-
-	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
-	data, err := ioutil.ReadAll(reader)
-	if err != nil {
-		return "", err
-	}
-	if response.StatusCode != 200 {
-		return "", fmt.Errorf(response.Status)
-	}
-
-	var result = make([]userQueryResult, 0, 2)
-	err = json.Unmarshal(data, &result)
-	if err != nil {
-		return "", err
-	}
-	if len(result) == 0 || !user.Matches(pkg.User(result[0].DisplayName)) {
-		return "", fmt.Errorf("found no user for %s", user)
-	}
-	if len(result) > 1 && user.Matches(pkg.User(result[1].DisplayName)) {
-		return "", fmt.Errorf("found more than one user for %s", user)
-	}
-	return result[0].AccountId, nil
-}
-
-func (api Api) Issues(jql model.Jql, startAt int) (model.Account, []model.Issue, error) {
-	body, _ := json.Marshal(issueQuery{
-		Fields:         []string{"project"},
-		Jql:            jql.Build(),
-		PaginatedQuery: &PaginatedQuery{StartAt: startAt},
-	})
-	searchUrl, _ := api.Server.Parse(searchIssueUrl)
-	response, err := pkg.CreateJsonRequest(api.Client, http.MethodPost, searchUrl, api.Userinfo, bytes.NewBuffer(body))
+func (api Api) Me() (model.Account, *time.Location, error) {
+	myselfUrl, err := api.Server.Parse(myselfUrl)
+	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, myselfUrl, api.Userinfo, nil)
 	if err != nil {
 		return "", nil, err
 	}
@@ -129,7 +85,6 @@ func (api Api) Issues(jql model.Jql, startAt int) (model.Account, []model.Issue,
 		}
 	}()
 
-	account, _ := url.PathUnescape(response.Header.Get(model.HeaderAccountId))
 	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
 	data, err := ioutil.ReadAll(reader)
 	if err != nil {
@@ -139,20 +94,95 @@ func (api Api) Issues(jql model.Jql, startAt int) (model.Account, []model.Issue,
 		return "", nil, fmt.Errorf(response.Status)
 	}
 
-	var result = issueQueryResult{}
+	var result userQueryResult
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return "", nil, err
 	}
+	return result.AccountId, result.Location(), nil
+}
+
+func (api Api) User(user *pkg.User, projects []pkg.Project) (model.Account, *time.Location, error) {
+	projectQueryPart := make([]string, len(projects))
+	for i, project := range projects {
+		projectQueryPart[i] = string(project)
+	}
+	userUrl, err := api.Server.Parse(fmt.Sprintf(searchUserUrl, strings.Join(projectQueryPart, ","), url.QueryEscape(user.DisplayName)))
+	response, err := pkg.CreateJsonRequest(api.Client, http.MethodGet, userUrl, api.Userinfo, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
+
+	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return "", nil, err
+	}
+	if response.StatusCode != 200 {
+		return "", nil, fmt.Errorf(response.Status)
+	}
+
+	var result = make([]userQueryResult, 0, 2)
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(result) == 0 || !user.Matches(pkg.User{DisplayName: result[0].DisplayName}) {
+		return "", nil, fmt.Errorf("found no user for %s", user.DisplayName)
+	}
+	if len(result) > 1 && user.Matches(pkg.User{DisplayName: result[1].DisplayName}) {
+		return "", nil, fmt.Errorf("found more than one user for %s", user.DisplayName)
+	}
+	return result[0].AccountId, result[0].Location(), nil
+}
+
+func (api Api) Issues(jql model.Jql, startAt int) ([]model.Issue, error) {
+	body, _ := json.Marshal(issueQuery{
+		Fields:         []string{"project"},
+		Jql:            jql.Build(),
+		PaginatedQuery: &PaginatedQuery{StartAt: startAt},
+	})
+	searchUrl, _ := api.Server.Parse(searchIssueUrl)
+	response, err := pkg.CreateJsonRequest(api.Client, http.MethodPost, searchUrl, api.Userinfo, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
+
+	reader, _ := charset.NewReader(response.Body, response.Header.Get("Content-Type"))
+	data, err := ioutil.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != 200 {
+		return nil, fmt.Errorf(response.Status)
+	}
+
+	var result = issueQueryResult{}
+	err = json.Unmarshal(data, &result)
+	if err != nil {
+		return nil, err
+	}
 	issues := result.issues()
 	if (result.IsLast == nil && result.Total >= startAt+result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
-		_, nextIssues, err := api.Issues(jql, startAt+result.MaxResults)
+		nextIssues, err := api.Issues(jql, startAt+result.MaxResults)
 		if err != nil {
-			return "", nil, err
+			return nil, err
 		}
 		issues = append(issues, nextIssues...)
 	}
-	return model.Account(account), issues, err
+	return issues, err
 }
 
 func (api Api) Worklog(key model.IssueKey, startAt int) ([]model.Worklog, error) {
@@ -210,23 +240,30 @@ func (issue issue) Key() model.IssueKey {
 	return issue.ApiKey
 }
 
-func (issue issue) Worklog(accounts map[model.Account]pkg.User, worklog []model.Worklog, fromDate, toDate time.Time) map[model.Account]pkg.Timesheet {
+func (issue issue) Worklog(accounts map[model.Account]*pkg.User, worklog []model.Worklog, fromDate, toDate time.Time) map[model.Account]pkg.Timesheet {
 	pKey := issue.Fields.Project.Key
 	iKey := issue.ApiKey
 	result := make(map[model.Account]pkg.Timesheet)
 	total := len(worklog)
 	for _, effort := range worklog {
-		if effort.IsBetween(fromDate, toDate) {
-			current := result[effort.Author().Id()]
+		account := effort.Author().Id()
+		user := accounts[account]
+		if user == nil {
+			continue
+		}
+		date := effort.Date().In(user.TimeZone)
+		date = time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+		if !date.Before(fromDate) && date.Before(toDate) {
+			current := result[account]
 			if current == nil {
 				current = make(pkg.Timesheet, 0, total)
 			}
-			result[effort.Author().Id()] = append(current, pkg.Effort{
-				User:        accounts[effort.Author().Id()],
+			result[account] = append(current, pkg.Effort{
+				User:        user,
 				Description: effort.Comment(),
 				Project:     pkg.Project(pKey),
 				Task:        pkg.Task(iKey),
-				Date:        effort.Date(),
+				Date:        date,
 				Duration:    effort.Duration(),
 			})
 		}
@@ -242,14 +279,13 @@ func (effort worklogItem) Author() model.Author {
 	return effort.ApiAuthor
 }
 
-func (effort worklogItem) IsBetween(fromDate, toDate time.Time) bool {
-	date := effort.Date()
-	return !date.Before(fromDate) && date.Before(toDate)
-}
-
 func (effort worklogItem) Date() time.Time {
 	date, _ := time.Parse(pkg.IsoDateTime, effort.Started)
-	return date.UTC().Truncate(time.Hour * 24)
+	// Do not convert the date to UTC first.
+	// The user logs his effort in his current timezone, and this would lead to shifted time entries.
+	//return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	//return date.Truncate(time.Hour * 24)
+	return date
 }
 
 func (effort worklogItem) Comment() pkg.Description {

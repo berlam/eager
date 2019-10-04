@@ -135,7 +135,7 @@ func addIssue(host string, port nat.Port, key projectKey) model.IssueKey {
 
 func setupContainer(ctx *context.Context) (testcontainers.Container, error) {
 	req := testcontainers.ContainerRequest{
-		Image:        "dchevell/jira-core:7",
+		Image:        "dchevell/jira-core@sha256:72aba213c4974002a5969a5ff0e72480a51cb8ff31fa15530dff854cf2350313",
 		ExposedPorts: []string{port + "/tcp"},
 		WaitingFor:   wait.ForLog("LauncherContextListener"),
 	}

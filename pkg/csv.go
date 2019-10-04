@@ -193,14 +193,14 @@ func (ts Timesheet) WriteCsv(writer io.Writer, spec *CsvSpecification, opts *int
 	}
 
 	currentUser := ts[0].User
-	currentDate := time.Date(ts[0].Date.Year(), time.Month(ts[0].Date.Month()), 1, 0, 0, 0, 0, time.UTC)
+	currentDate := time.Date(ts[0].Date.Year(), ts[0].Date.Month(), 1, 0, 0, 0, 0, time.UTC)
 	for _, effort := range ts {
 		if currentUser != nil && currentUser.DisplayName != effort.User.DisplayName {
 			if currentDate.Day() > 1 {
 				emptyLinesForDaysBetween(csvw, spec, currentDate, currentDate.AddDate(0, 1, 1-currentDate.Day()), currentUser, opts.Decimal)
 			}
 			currentUser = effort.User
-			currentDate = time.Date(effort.Date.Year(), time.Month(effort.Date.Month()), 1, 0, 0, 0, 0, time.UTC)
+			currentDate = time.Date(effort.Date.Year(), effort.Date.Month(), 1, 0, 0, 0, 0, time.UTC)
 		}
 		if opts.Empty {
 			emptyLinesForDaysBetween(csvw, spec, currentDate, effort.Date, effort.User, opts.Decimal)

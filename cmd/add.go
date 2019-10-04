@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"eager/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -9,9 +8,6 @@ func init() {
 	// TODO mro Reactivate that command after implementing it
 	//rootCmd.AddCommand(addCmd)
 	addCmd.AddCommand(addJiraCmd)
-
-	addCmd.PersistentFlags().Bool(internal.FlagAll, false, "Add all items to the backend")
-	addCmd.PersistentFlags().Bool(internal.FlagForce, false, "Overwrite existing values")
 }
 
 var addCmd = &cobra.Command{

@@ -159,7 +159,7 @@ func do(api model.Api, year int, month time.Month, projects []pkg.Project, accou
 						effort <- pkg.Effort{
 							User:        user,
 							Description: worklog.Comment(),
-							Project:     pkg.Project(issue.Project()),
+							Project:     issue.Project(),
 							Task:        pkg.Task(issue.Key()),
 							Date:        date,
 							Duration:    worklog.Duration(),

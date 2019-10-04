@@ -20,8 +20,6 @@ const (
 	FlagEmpty         = "empty"
 	FlagDecimal       = "decimal"
 	FlagNegate        = "negate"
-	FlagAll           = "all"
-	FlagForce         = "force"
 )
 
 type Configuration struct {

@@ -90,7 +90,7 @@ func addProject(host string, port nat.Port) projectKey {
 		Key projectKey `json:"key"`
 	}
 	data, _ := ioutil.ReadAll(response.Body)
-	_ = json.Unmarshal(data, result)
+	_ = json.Unmarshal(data, &result)
 	return result.Key
 }
 
@@ -129,7 +129,7 @@ func addIssue(host string, port nat.Port, key projectKey) model.IssueKey {
 		Key model.IssueKey `json:"key"`
 	}
 	data, _ := ioutil.ReadAll(response.Body)
-	_ = json.Unmarshal(data, result)
+	_ = json.Unmarshal(data, &result)
 	return result.Key
 }
 

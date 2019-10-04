@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -14,9 +15,16 @@ import (
 	"time"
 )
 
+const (
+	jiraSearchProjectUrl = "/rest/api/3/project/search?startAt=%s"
+	jiraSearchUserUrl    = "/rest/api/3/user/assignable/multiProjectSearch?projectKeys=%s&query=%s&maxResults=2"
+	jiraSearchIssueUrl   = "/rest/api/3/search"
+	jiraWorklogUrl       = "/rest/api/3/issue/%s/worklog?startAt=%s"
+)
+
 type v3 struct {
-	client *http.Client
-	server *url.URL
+	client   *http.Client
+	server   *url.URL
 	userinfo *url.Userinfo
 }
 
@@ -26,7 +34,12 @@ func (api v3) projects(startAt int) ([]pkg.Project, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
 
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
@@ -36,7 +49,7 @@ func (api v3) projects(startAt int) ([]pkg.Project, error) {
 		return nil, fmt.Errorf(response.Status)
 	}
 
-	var result= projectQueryResult{}
+	var result = projectQueryResult{}
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return nil, err
@@ -91,7 +104,12 @@ func (api v3) user(user pkg.User, projects []pkg.Project) (Account, error) {
 	if err != nil {
 		return "", err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
 
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
@@ -101,7 +119,7 @@ func (api v3) user(user pkg.User, projects []pkg.Project) (Account, error) {
 		return "", fmt.Errorf(response.Status)
 	}
 
-	var result= make([]userQueryResult, 0, 2)
+	var result = make([]userQueryResult, 0, 2)
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return "", err
@@ -115,7 +133,7 @@ func (api v3) user(user pkg.User, projects []pkg.Project) (Account, error) {
 	return result[0].AccountId, nil
 }
 
-func (api v3) issues(jql jql, startAt int) (Account, []issue, error) {
+func (api v3) issues(jql jql, startAt int) (Account, []Issue, error) {
 	body, _ := json.Marshal(issueQuery{
 		Fields:         []string{"project"},
 		Jql:            jql.build(),
@@ -126,7 +144,12 @@ func (api v3) issues(jql jql, startAt int) (Account, []issue, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
 
 	account, _ := url.PathUnescape(response.Header.Get(headerAccountId))
 	data, err := ioutil.ReadAll(response.Body)
@@ -137,12 +160,12 @@ func (api v3) issues(jql jql, startAt int) (Account, []issue, error) {
 		return "", nil, fmt.Errorf(response.Status)
 	}
 
-	var result= issueQueryResult{}
+	var result = issueQueryResult{}
 	err = json.Unmarshal(data, &result)
 	if err != nil {
 		return "", nil, err
 	}
-	issues := result.Issues
+	issues := result.issues()
 	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
 		_, nextIssues, err := api.issues(jql, result.Total)
 		if err != nil {
@@ -153,13 +176,18 @@ func (api v3) issues(jql jql, startAt int) (Account, []issue, error) {
 	return Account(account), issues, err
 }
 
-func (api v3) worklog(key IssueKey, startAt int) (worklogItems, error) {
+func (api v3) worklog(key IssueKey, startAt int) ([]Worklog, error) {
 	worklogUrl, err := api.server.Parse(fmt.Sprintf(jiraWorklogUrl, string(key), strconv.Itoa(startAt)))
 	response, err := createRequest(api.client, http.MethodGet, worklogUrl, api.userinfo, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
 
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
@@ -169,9 +197,9 @@ func (api v3) worklog(key IssueKey, startAt int) (worklogItems, error) {
 		return nil, fmt.Errorf(response.Status)
 	}
 
-	var result= worklogQueryResult{}
+	var result = worklogQueryResult{}
 	err = json.Unmarshal(data, &result)
-	items := result.Worklogs
+	items := result.worklogs()
 	if (result.IsLast == nil && result.Total >= result.MaxResults) || (result.IsLast != nil && !*result.IsLast) {
 		nextItems, err := api.worklog(key, result.Total)
 		if err != nil {
@@ -180,55 +208,6 @@ func (api v3) worklog(key IssueKey, startAt int) (worklogItems, error) {
 		items = append(items, nextItems...)
 	}
 	return items, nil
-}
-
-func (items worklogItems) getWorklogByAccountIdAndDate(pKey projectKey, iKey IssueKey, fromDate, toDate time.Time) map[Account]pkg.Timesheet {
-	result := make(map[Account]pkg.Timesheet)
-	total := len(items)
-	for _, effort := range items {
-		if effort.isBetween(fromDate, toDate) {
-			current := result[effort.Author.AccountId]
-			if current == nil {
-				current = make(pkg.Timesheet, 0, total)
-			}
-			result[effort.Author.AccountId] = append(current, pkg.Effort{
-				User:        pkg.User(effort.Author.DisplayName),
-				Description: effort.getComment(),
-				Project:     pkg.Project(pKey),
-				Task:        pkg.Task(iKey),
-				Date:        effort.getDate(),
-				Duration:    effort.getDuration(),
-			})
-		}
-	}
-	return result
-}
-
-func (issue issue) getWorklog(worklogItems worklogItems, fromDate, toDate time.Time) map[Account]pkg.Timesheet {
-	return worklogItems.getWorklogByAccountIdAndDate(issue.Fields.Project.Key, issue.Key, fromDate, toDate)
-}
-
-func (effort worklogItem) getDate() time.Time {
-	date, _ := time.Parse(pkg.IsoDateTime, effort.Started)
-	return date.UTC().Truncate(time.Hour * 24)
-}
-
-func (effort worklogItem) isBetween(fromDate, toDate time.Time) bool {
-	date := effort.getDate()
-	return !date.Before(fromDate) && date.Before(toDate)
-}
-
-func (effort worklogItem) getComment() pkg.Description {
-	description := ""
-	if len(effort.Comment.Content) > 0 && len(effort.Comment.Content[0].Content) > 0 {
-		description = effort.Comment.Content[0].Content[0].Text
-	}
-	return pkg.Description(description)
-}
-
-func (effort worklogItem) getDuration() time.Duration {
-	duration, _ := time.ParseDuration(strconv.Itoa(effort.TimeSpentSeconds) + "s")
-	return duration
 }
 
 type projectKey string
@@ -278,6 +257,14 @@ type issueQueryResult struct {
 	Issues []issue `json:"issues"`
 }
 
+func (result issueQueryResult) issues() []Issue {
+	issues := make([]Issue, len(result.Issues))
+	for e := range issues {
+		issues[e] = result.Issues[e]
+	}
+	return issues
+}
+
 type issue struct {
 	Id     string   `json:"id"`
 	Key    IssueKey `json:"key"`
@@ -290,12 +277,46 @@ type issue struct {
 	} `json:"fields"`
 }
 
-type worklogQueryResult struct {
-	*PaginatedResult
-	Worklogs worklogItems `json:"worklogs"`
+func (issue issue) key() IssueKey {
+	return issue.Key
 }
 
-type worklogItems []*worklogItem
+func (issue issue) worklog(worklog []Worklog, fromDate, toDate time.Time) map[Account]pkg.Timesheet {
+	pKey := issue.Fields.Project.Key
+	iKey := issue.Key
+	result := make(map[Account]pkg.Timesheet)
+	total := len(worklog)
+	for _, effort := range worklog {
+		if effort.isBetween(fromDate, toDate) {
+			current := result[effort.author().id()]
+			if current == nil {
+				current = make(pkg.Timesheet, 0, total)
+			}
+			result[effort.author().id()] = append(current, pkg.Effort{
+				User:        pkg.User(effort.author().name()),
+				Description: effort.comment(),
+				Project:     pkg.Project(pKey),
+				Task:        pkg.Task(iKey),
+				Date:        effort.date(),
+				Duration:    effort.duration(),
+			})
+		}
+	}
+	return result
+}
+
+type worklogQueryResult struct {
+	*PaginatedResult
+	Worklogs []*worklogItem `json:"worklogs"`
+}
+
+func (result worklogQueryResult) worklogs() []Worklog {
+	worklogs := make([]Worklog, len(result.Worklogs))
+	for e := range worklogs {
+		worklogs[e] = result.Worklogs[e]
+	}
+	return worklogs
+}
 
 type worklogItem struct {
 	Author       author `json:"author"`
@@ -313,4 +334,39 @@ type worklogItem struct {
 	} `json:"comment,omitempty"`
 	Started          string `json:"started"`
 	TimeSpentSeconds int    `json:"timeSpentSeconds"`
+}
+
+func (author author) id() Account {
+	return author.AccountId
+}
+
+func (author author) name() string {
+	return author.DisplayName
+}
+
+func (effort worklogItem) author() Author {
+	return effort.Author
+}
+
+func (effort worklogItem) isBetween(fromDate, toDate time.Time) bool {
+	date := effort.date()
+	return !date.Before(fromDate) && date.Before(toDate)
+}
+
+func (effort worklogItem) date() time.Time {
+	date, _ := time.Parse(pkg.IsoDateTime, effort.Started)
+	return date.UTC().Truncate(time.Hour * 24)
+}
+
+func (effort worklogItem) comment() pkg.Description {
+	description := ""
+	if len(effort.Comment.Content) > 0 && len(effort.Comment.Content[0].Content) > 0 {
+		description = effort.Comment.Content[0].Content[0].Text
+	}
+	return pkg.Description(description)
+}
+
+func (effort worklogItem) duration() time.Duration {
+	duration, _ := time.ParseDuration(strconv.Itoa(effort.TimeSpentSeconds) + "s")
+	return duration
 }

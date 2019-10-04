@@ -15,12 +15,8 @@ import (
 )
 
 const (
-	headerAccountId      = "X-AACCOUNTID"
-	jiraServerInfo       = "/rest/api/latest/serverInfo"
-	jiraSearchProjectUrl = "/rest/api/3/project/search?startAt=%s"
-	jiraSearchUserUrl    = "/rest/api/3/user/assignable/multiProjectSearch?projectKeys=%s&query=%s&maxResults=2"
-	jiraSearchIssueUrl   = "/rest/api/3/search"
-	jiraWorklogUrl       = "/rest/api/3/issue/%s/worklog?startAt=%s"
+	headerAccountId = "X-AACCOUNTID"
+	jiraServerInfo  = "/rest/api/latest/serverInfo"
 )
 
 func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo) (Api, error) {
@@ -29,7 +25,12 @@ func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo)
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() {
+		err := response.Body.Close()
+		if err != nil {
+			log.Println("Response could not be closed.", err)
+		}
+	}()
 
 	data, err := ioutil.ReadAll(response.Body)
 	if err != nil {
@@ -52,7 +53,7 @@ func getApiVersion(client *http.Client, server *url.URL, userinfo *url.Userinfo)
 			userinfo: userinfo,
 		}, nil
 	}
-	return nil, nil
+	return &v2{}, nil
 }
 
 func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, year int, month time.Month, projects []pkg.Project) pkg.Timesheet {
@@ -75,14 +76,14 @@ func GetTimesheet(client *http.Client, server *url.URL, userinfo *url.Userinfo, 
 	var wg sync.WaitGroup
 	wg.Add(len(issues))
 	for _, item := range issues {
-		go func(item issue) {
+		go func(item Issue) {
 			defer wg.Done()
-			items, err := api.worklog(item.Key, 0)
+			items, err := api.worklog(item.key(), 0)
 			if err != nil {
-				log.Println("Could not get effort for "+item.Key, err)
+				log.Println("Could not get effort for "+item.key(), err)
 				return
 			}
-			c <- item.getWorklog(items, fromDate, toDate)[accountId]
+			c <- item.worklog(items, fromDate, toDate)[accountId]
 		}(item)
 	}
 	go func() {
@@ -139,14 +140,14 @@ func GetBulkTimesheet(client *http.Client, server *url.URL, userinfo *url.Userin
 	var wg sync.WaitGroup
 	wg.Add(len(issues))
 	for _, item := range issues {
-		go func(item issue) {
+		go func(item Issue) {
 			defer wg.Done()
-			items, err := api.worklog(item.Key, 0)
+			items, err := api.worklog(item.key(), 0)
 			if err != nil {
-				log.Println("Could not get effort for "+item.Key, err)
+				log.Println("Could not get effort for "+item.key(), err)
 				return
 			}
-			worklog := item.getWorklog(items, fromDate, toDate)
+			worklog := item.worklog(items, fromDate, toDate)
 			for _, user := range users {
 				c <- worklog[Account(user)]
 			}
@@ -205,9 +206,27 @@ type UserAccessor interface {
 }
 
 type IssueAccessor interface {
-	issues(jql jql, startAt int) (Account, []issue, error)
+	issues(jql jql, startAt int) (Account, []Issue, error)
 }
 
 type WorklogAccessor interface {
-	worklog(key IssueKey, startAt int) (worklogItems, error)
+	worklog(key IssueKey, startAt int) ([]Worklog, error)
+}
+
+type Issue interface {
+	key() IssueKey
+	worklog(worklog []Worklog, fromDate, toDate time.Time) map[Account]pkg.Timesheet
+}
+
+type Worklog interface {
+	isBetween(fromDate, toDate time.Time) bool
+	author() Author
+	date() time.Time
+	comment() pkg.Description
+	duration() time.Duration
+}
+
+type Author interface {
+	id() Account
+	name() string
 }

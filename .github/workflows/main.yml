@@ -1,0 +1,26 @@
+name: "Main"
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+
+      - name: Build
+        run: ./.github/build.sh
+
+      - name: Test
+        run: ./.github/test.sh
+        env:
+          EAGER_ATLASSIAN_CLOUD_URL: ${{ secrets.EAGER_ATLASSIAN_CLOUD_URL }}
+          EAGER_ATLASSIAN_CLOUD_USER: ${{ secrets.EAGER_ATLASSIAN_CLOUD_USER }}
+          EAGER_ATLASSIAN_CLOUD_TOKEN: ${{ secrets.EAGER_ATLASSIAN_CLOUD_TOKEN }}

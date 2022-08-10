@@ -28,8 +28,8 @@ $DATE;$PROJECT;$TASK;$DURATION;$DESCRIPTION
 ```
 
 ### [Atlassian Jira](https://www.atlassian.com/software/jira/) ###
-[API v2](https://developer.atlassian.com/cloud/jira/platform/rest/v2/)
-[API v3](https://developer.atlassian.com/cloud/jira/platform/rest/v3/)
+- [API v2](https://developer.atlassian.com/cloud/jira/platform/rest/v2/)
+- [API v3](https://developer.atlassian.com/cloud/jira/platform/rest/v3/)
 
 API version 3 with basic auth supported.
 
@@ -44,16 +44,16 @@ Only worklogs visible to the user are returned. Visible worklogs are those:
 - where the user belongs to the group or has the role visibility is restricted to.
 
 ### TODO [Bugzilla](https://www.bugzilla.org/) ###
-[API](https://www.bugzilla.org/docs/4.4/en/html/api/Bugzilla/WebService/Bug.html)
-[Docker](https://hub.docker.com/u/bugzilla/)
+- [API](https://www.bugzilla.org/docs/4.4/en/html/api/Bugzilla/WebService/Bug.html)
+- [Docker](https://hub.docker.com/u/bugzilla/)
 
 ### TODO [GitLab](https://www.gitlab.com/) ###
-[API](https://docs.gitlab.com/ee/workflow/time_tracking.html)
-[Docker](https://docs.gitlab.com/omnibus/docker/)
+- [API](https://docs.gitlab.com/ee/workflow/time_tracking.html)
+- [Docker](https://docs.gitlab.com/omnibus/docker/)
 
 ### TODO [JetBrains YouTrack](https://www.jetbrains.com/youtrack/) ###
-[API](https://www.jetbrains.com/help/youtrack/standalone/Time-Tracking-REST-API.html)
-[Docker](https://hub.docker.com/r/jetbrains/youtrack/)
+- [API](https://www.jetbrains.com/help/youtrack/standalone/Time-Tracking-REST-API.html)
+- [Docker](https://hub.docker.com/r/jetbrains/youtrack/)
 
 ### [Projektron BCS](https://www.projektron.de/bcs/) ###
 Create a effort filter inside the web application with following columns enabled:
@@ -68,8 +68,8 @@ You might also filter for your project or every other property you like inside t
 Every filter result listed there will be used for the worklog.
 
 ### TODO [Redmine](https://www.redmine.org/) ###
-[API](https://www.redmine.org/projects/redmine/wiki/RedmineTimeTracking)
-[Docker](https://hub.docker.com/_/redmine)
+- [API](https://www.redmine.org/projects/redmine/wiki/RedmineTimeTracking)
+- [Docker](https://hub.docker.com/_/redmine)
 
 ## Build from source ##
 If you want to build it right away you need to have a working [Go environment](https://golang.org/doc/install).
